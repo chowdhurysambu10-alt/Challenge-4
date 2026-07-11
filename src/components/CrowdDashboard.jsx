@@ -2,18 +2,17 @@ import React, { useState } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts';
 import { TrendingUp, Sparkles, Volume2 } from 'lucide-react';
 
+const SURGE_DATA = [
+  { name: '+10m', predictedFans: 69500, loadFactor: 72 },
+  { name: '+20m', predictedFans: 70850, loadFactor: 85 },
+  { name: '+30m', predictedFans: 71500, loadFactor: 87 },
+  { name: '+40m', predictedFans: 72000, loadFactor: 64 },
+  { name: '+50m', predictedFans: 71200, loadFactor: 80 },
+  { name: '+60m', predictedFans: 68500, loadFactor: 74 }
+];
+
 export default function CrowdDashboard({ gates, zones, operationalInsights, triggerBroadcastRedirect }) {
   const [broadcastSentId, setBroadcastSentId] = useState(null);
-
-  // Forecast data
-  const surgeData = [
-    { name: '+10m', predictedFans: 69500, loadFactor: 72 },
-    { name: '+20m', predictedFans: 70850, loadFactor: 85 },
-    { name: '+30m', predictedFans: 71500, loadFactor: 87 },
-    { name: '+40m', predictedFans: 72000, loadFactor: 64 },
-    { name: '+50m', predictedFans: 71200, loadFactor: 80 },
-    { name: '+60m', predictedFans: 68500, loadFactor: 74 }
-  ];
 
   const handleBroadcast = (id) => {
     setBroadcastSentId(id);
@@ -151,7 +150,7 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
             </div>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-64 w-full" role="img" aria-label={`Gate wait-time chart. ${gates.map((gate) => `Gate ${gate.id}: ${gate.waitTime} minutes`).join('. ')}.`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={gates} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -211,9 +210,9 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
             </span>
           </div>
 
-          <div className="h-64 w-full font-mono">
+          <div className="h-64 w-full font-mono" role="img" aria-label={`Predicted crowd-load chart. ${SURGE_DATA.map((point) => `${point.name}: ${point.loadFactor} percent`).join('. ')}.`}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={surgeData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+              <LineChart data={SURGE_DATA} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" darkStroke="#1f1f1f" vertical={false} />
                 <XAxis 
                   dataKey="name" 

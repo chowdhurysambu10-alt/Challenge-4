@@ -95,7 +95,7 @@ export function updateMockData(currentData) {
   // Update Checked In count (gradually rising up to capacity)
   const rate = Math.floor(Math.random() * 25) + 5;
   const newCheckedIn = Math.min(
-    currentData.stadiumStats.totalCheckedIn + (Math.random() > 0.3 ? rate : -rate),
+    currentData.stadiumStats.totalCheckedIn + rate,
     currentData.stadiumStats.capacity
   );
   

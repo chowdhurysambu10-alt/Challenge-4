@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { 
   MessageSquare, 
   Map, 
@@ -22,10 +22,11 @@ import { useStadium } from './context/StadiumContext';
 import LandingPage from './components/LandingPage';
 import FanAssistant from './components/FanAssistant';
 import StadiumMap from './components/StadiumMap';
-import CrowdDashboard from './components/CrowdDashboard';
 import TransportLogistics from './components/TransportLogistics';
 import EmergencyAccessibility from './components/EmergencyAccessibility';
 import OperationsPanel from './components/OperationsPanel';
+
+const CrowdDashboard = lazy(() => import('./components/CrowdDashboard'));
 
 export default function App() {
   const {
@@ -58,15 +59,6 @@ export default function App() {
           <FanAssistant 
             currentLanguage={currentLanguage} 
             setLanguage={setLanguage}
-            addAlertNotification={() => 
-              handleSetEmergencyState({
-                active: true,
-                type: 'general',
-                location: 'Stadium Wide',
-                message: 'Emergency evacuation triggered via chatbot override.',
-                evacRoute: ['Exit corridors A, B, C, D']
-              })
-            }
           />
         );
       case 'map':
@@ -80,12 +72,14 @@ export default function App() {
         );
       case 'crowd':
         return (
-          <CrowdDashboard 
-            gates={stadiumData.gates} 
-            zones={stadiumData.zones}
-            operationalInsights={stadiumData.operationalInsights}
-            triggerBroadcastRedirect={handleTriggerBroadcastRedirect}
-          />
+          <Suspense fallback={<div className="rounded-3xl bg-white p-6 text-sm text-neutral-600 shadow-sm dark:bg-[#121212] dark:text-neutral-300" role="status">Loading crowd intelligence…</div>}>
+            <CrowdDashboard
+              gates={stadiumData.gates}
+              zones={stadiumData.zones}
+              operationalInsights={stadiumData.operationalInsights}
+              triggerBroadcastRedirect={handleTriggerBroadcastRedirect}
+            />
+          </Suspense>
         );
       case 'transit':
         return (
@@ -138,21 +132,22 @@ export default function App() {
   return (
     <div className={darkMode ? "dark text-white" : "text-black"}>
       <div className="min-h-screen bg-[#f3f4f6] dark:bg-[#0a0a0a] text-[#121212] dark:text-white flex flex-col font-sans relative transition-colors duration-300">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-black">Skip to main content</a>
       
       {/* Top Banner Override for Emergencies */}
       {stadiumData.emergencyState.active && (
-        <div className="z-50 bg-[#121212] text-[#e2ff70] px-4 md:px-8 py-3 border-b border-neutral-900 flex items-center justify-between text-xs md:text-sm font-bold shadow-md">
+        <div role="alert" className="z-50 bg-[#121212] text-[#e2ff70] px-4 md:px-8 py-3 border-b border-neutral-900 flex items-center justify-between text-xs md:text-sm font-bold shadow-md">
           <div className="flex items-center space-x-2.5">
             <ShieldAlert className="w-5 h-5 animate-bounce" />
             <span>
-              SAFETY ACTIVE: Incident in {stadiumData.emergencyState.location}. Evacuate via nearest flashing green pathways.
+              SIMULATED SAFETY EVENT: Incident in {stadiumData.emergencyState.location}. Review the illustrative exit pathways on the map.
             </span>
           </div>
           <button 
             onClick={() => handleSetEmergencyState({ active: false, type: null, location: null, message: '', evacRoute: [] })}
             className="bg-[#e2ff70] text-[#121212] px-3 py-1 rounded-full text-[10px] uppercase font-mono font-bold cursor-pointer transition-all ml-4"
           >
-            Clear Incident
+            Clear Simulation
           </button>
         </div>
       )}
@@ -161,7 +156,7 @@ export default function App() {
       <div className="flex-1 flex flex-col md:flex-row min-h-screen">
         
         {/* Floating Left Sidebar matching screenshot */}
-        <aside className={`w-72 md:w-20 lg:w-64 bg-[#121212] text-white flex-shrink-0 z-40 transition-transform duration-300 md:translate-x-0 m-4 rounded-[32px] flex flex-col justify-between p-5 shadow-2xl ${
+        <aside id="primary-navigation" className={`w-72 md:w-20 lg:w-64 bg-[#121212] text-white flex-shrink-0 z-40 transition-transform duration-300 md:translate-x-0 m-4 rounded-[32px] flex flex-col justify-between p-5 shadow-2xl ${
           mobileMenuOpen ? 'translate-x-0 absolute top-0 bottom-0 left-0 border border-neutral-850' : '-translate-x-full absolute md:relative'
         }`}>
           <div className="flex flex-col space-y-8">
@@ -177,7 +172,7 @@ export default function App() {
             </div>
 
             {/* Sidebar Navigation */}
-            <nav className="space-y-2">
+            <nav className="space-y-2" aria-label="Stadium modules">
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
@@ -185,6 +180,7 @@ export default function App() {
                   <button
                     key={item.id}
                     onClick={() => { setActiveTab(item.id); setMobileMenuOpen(false); }}
+                    aria-current={isActive ? 'page' : undefined}
                     className={`w-full flex items-center space-x-3.5 p-3 rounded-2xl transition-all text-left cursor-pointer group ${
                       isActive 
                         ? 'bg-white text-black font-bold' 
@@ -228,7 +224,7 @@ export default function App() {
         </aside>
 
         {/* Main Content Workspace on the Right */}
-        <main className="flex-1 p-6 md:p-10 flex flex-col justify-between overflow-y-auto max-w-7xl mx-auto w-full">
+          <main id="main-content" tabIndex="-1" className="flex-1 p-6 md:p-10 flex flex-col justify-between overflow-y-auto max-w-7xl mx-auto w-full">
           
           <div className="space-y-8">
             {/* Header: matches screenshot layout */}
@@ -238,6 +234,9 @@ export default function App() {
                   {/* Mobile navigation trigger */}
                   <button 
                     onClick={() => setMobileMenuOpen(prev => !prev)}
+                    aria-label={mobileMenuOpen ? 'Close stadium module navigation' : 'Open stadium module navigation'}
+                    aria-expanded={mobileMenuOpen}
+                    aria-controls="primary-navigation"
                     className="md:hidden p-1.5 rounded-xl border border-neutral-300 dark:border-neutral-750 text-neutral-650 hover:text-black dark:hover:text-white cursor-pointer bg-white dark:bg-neutral-900"
                   >
                     {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -256,7 +255,7 @@ export default function App() {
 
                   {/* Active Indicator */}
                   <span className="bg-[#e2ff70] text-[#121212] px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider font-mono">
-                    LIVE STREAM
+                    SIMULATION
                   </span>
                 </div>
 
@@ -272,6 +271,8 @@ export default function App() {
                 {/* Dark Mode Button */}
                 <button
                   onClick={() => setDarkMode(prev => !prev)}
+                  aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                  aria-pressed={darkMode}
                   className="p-2.5 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 shadow-sm rounded-2xl text-neutral-600 dark:text-neutral-450 hover:text-black dark:hover:text-white transition-all cursor-pointer flex items-center justify-center"
                   title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
                 >
@@ -281,7 +282,9 @@ export default function App() {
                 {/* Language Selector */}
                 <div className="flex items-center space-x-2 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 shadow-sm px-3.5 py-2 rounded-2xl">
                   <Globe className="w-4 h-4 text-neutral-500" />
+                  <label className="sr-only" htmlFor="dashboard-language">Dashboard language</label>
                   <select
+                    id="dashboard-language"
                     value={currentLanguage}
                     onChange={(e) => setLanguage(e.target.value)}
                     className="bg-transparent text-neutral-850 dark:text-neutral-200 text-xs font-mono font-bold border-none outline-none focus:ring-0 cursor-pointer"
@@ -299,6 +302,8 @@ export default function App() {
                 <div className="relative">
                   <button 
                     onClick={() => setShowNotificationsDropdown(prev => !prev)}
+                    aria-label="Toggle simulation notifications"
+                    aria-expanded={showNotificationsDropdown}
                     className="p-2 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 shadow-sm rounded-2xl text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-all cursor-pointer relative"
                   >
                     <Bell className="w-4 h-4" />
@@ -308,7 +313,7 @@ export default function App() {
                   </button>
 
                   {showNotificationsDropdown && (
-                    <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 rounded-3xl p-5 shadow-2xl z-50 space-y-3 font-mono text-[#121212] dark:text-white">
+                    <div role="region" aria-label="Simulation notifications" className="absolute right-0 mt-3 w-80 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 rounded-3xl p-5 shadow-2xl z-50 space-y-3 font-mono text-[#121212] dark:text-white">
                       <div className="flex justify-between items-center border-b border-neutral-100 dark:border-neutral-850 pb-2">
                         <span className="text-xs font-bold uppercase tracking-wider">IoT Logs</span>
                         <span className="w-2 h-2 rounded-full bg-[#e2ff70]" />
@@ -342,7 +347,7 @@ export default function App() {
           <footer className="mt-12 pt-6 border-t border-neutral-200 dark:border-neutral-800 flex flex-col md:flex-row items-center justify-between text-xs text-neutral-500 gap-4 font-mono">
             <div className="flex items-center space-x-2.5">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#121212] dark:bg-[#e2ff70]" />
-              <span>Telemetry sync: Nominal (0.4s latency)</span>
+              <span>Simulation sync: Nominal (0.4s latency)</span>
             </div>
             <div>
               Match: <strong className="text-black dark:text-white">{stadiumData.stadiumStats.matchInfo.match} ({stadiumData.stadiumStats.matchInfo.timeText})</strong>

@@ -98,7 +98,7 @@ export default function OperationsPanel({ stadiumStats, operationalInsights, dis
               <h3 className="text-sm font-bold tracking-wider text-neutral-450 dark:text-neutral-400 uppercase font-mono">AI Operational Feed</h3>
             </div>
             <span className="bg-neutral-100 dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400 text-[9px] uppercase tracking-widest px-2.5 py-1 rounded-full font-mono font-bold">
-              Telemetry Stream
+              Simulated Telemetry
             </span>
           </div>
 
@@ -158,7 +158,7 @@ export default function OperationsPanel({ stadiumStats, operationalInsights, dis
             </div>
 
             <p className="text-neutral-500 dark:text-neutral-400 text-xs mb-4 leading-relaxed font-sans">
-              Deploy logistics and response volunteers instantly to bottlenecks flagged by the AI telemetry engine.
+              Preview a simulated volunteer allocation for bottlenecks flagged by the demo telemetry engine. This does not contact staff.
             </p>
 
             <div className="space-y-4">
@@ -172,14 +172,14 @@ export default function OperationsPanel({ stadiumStats, operationalInsights, dis
                 {staffDispatched ? (
                   <div className="bg-[#e2ff70] text-black border border-neutral-350 p-2.5 rounded-xl flex items-center space-x-2 text-xs font-bold shadow-sm animate-pulse">
                     <Check className="w-4 h-4 text-black" />
-                    <span>Squads #4 and #6 are en-route. ETA: 2m.</span>
+                    <span>Demo: Squads #4 and #6 would be assigned. Estimated arrival: 2m.</span>
                   </div>
                 ) : (
                   <button
                     onClick={handleDispatchStaff}
                     className="w-full bg-[#121212] dark:bg-white text-white dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-100 border border-neutral-900 dark:border-neutral-200 py-2.5 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer shadow-sm font-sans"
                   >
-                    Deploy Staff Now
+                    Simulate Staff Dispatch
                   </button>
                 )}
               </div>
@@ -192,7 +192,7 @@ export default function OperationsPanel({ stadiumStats, operationalInsights, dis
           </div>
 
           <div className="p-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 rounded-xl text-[9px] text-neutral-400 dark:text-neutral-500 leading-relaxed mt-4 font-mono">
-            Note: Deployed stewards receive directions directly on their mobile client, updated in real-time.
+            Demo boundary: this action records only a local simulation notification; it cannot reach staff devices.
           </div>
         </div>
 

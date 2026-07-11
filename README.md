@@ -44,7 +44,7 @@ Volunteer coordinator command center. Houses live KPI counters (Total checked-in
 *   **Styling**: Tailwind CSS v4 (minimalist monochrome layout with neon lime `#e2ff70` highlights)
 *   **Charts**: Recharts (gradient bar graphs & linear surge predictors)
 *   **Icons**: Lucide React
-*   **GenAI Engine**: Anthropic Messages API (Claude `claude-sonnet-4-6` model)
+*   **GenAI Engine**: Server-side Anthropic Messages API proxy (Claude `claude-sonnet-4-6` model)
 
 ---
 
@@ -52,13 +52,15 @@ Volunteer coordinator command center. Houses live KPI counters (Total checked-in
 
 Instead of relying on generic pre-trained answers or static lookup FAQs, FIFA Copilot uses **context-grounded prompt engineering**:
 1. **Context Extraction**: App state updates from the 6-second simulated IoT telemetry loop are structured into markdown tables.
-2. **Prompt Injection**: Whenever a fan sends a message, a system prompt is built dynamically, injecting this live telemetry:
+2. **Prompt Injection**: Whenever a fan sends a message, a system prompt is built on the server, injecting simulated telemetry:
    - Specific wait times at gates
    - Crowd load percentages at stands
    - Parking lot fill rates
    - Weather and safety alerts
-3. **Structured Outputs**: The model is instructed to output strictly in JSON format matching `{ "reply": "...", "reasoning": "..." }`. The React app parses this JSON, placing the conversational response in the chat bubble and the Claude reasoning explanation in the custom **REASONING** badge footer.
-4. **Deterministic Fallbacks**: Safety-critical terms (e.g. `fire`, `danger`, `evacuate`) bypass the model call entirely to trigger immediate deterministic exit procedures. If the API key is missing or network connectivity is lost, the chatbot gracefully notifies the developer and engages a rule-based offline search backup to answer questions.
+3. **Structured Outputs**: The model is instructed to output strictly in JSON format matching `{ "reply": "...", "basis": "..." }`. The UI shows the conversational response and the relevant telemetry basis, never private model reasoning.
+4. **Deterministic Fallbacks**: Safety-critical terms (e.g. `fire`, `danger`, `evacuate`) bypass the model and direct the user to official venue instructions and nearby staff. If the live service is unavailable, the chatbot uses a local demo fallback.
+
+> **Demo safety boundary:** telemetry and operational controls are simulated UI state. They do not contact staff, dispatch vehicles, broadcast announcements, or control venue infrastructure.
 
 ---
 
@@ -78,16 +80,23 @@ Instead of relying on generic pre-trained answers or static lookup FAQs, FIFA Co
 3.  **Configure API Credentials**:
     Create a `.env` file in the root directory and define your Anthropic API Key:
     ```env
-    VITE_ANTHROPIC_API_KEY=your_anthropic_api_key_here
+    ANTHROPIC_API_KEY=your_anthropic_api_key_here
     ```
 
-4.  **Run Development Server**:
+4.  **Run the secure local API** (in one terminal):
+    ```bash
+    npm run server
+    ```
+
+5.  **Run Development Server** (in another terminal):
     ```bash
     npm run dev
     ```
 
-5.  **Build Production Assets**:
+6.  **Run checks and build production assets**:
     ```bash
+    npm test
+    npm run lint
     npm run build
     ```
 

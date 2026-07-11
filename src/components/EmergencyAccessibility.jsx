@@ -45,12 +45,12 @@ export default function EmergencyAccessibility({ emergencyState, setEmergencySta
               <h3 className="text-sm font-bold tracking-wider text-neutral-400 uppercase font-mono">Emergency Systems</h3>
             </div>
             <span className="text-[9px] font-mono bg-neutral-100 dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400 px-2.5 py-1 rounded-full font-bold">
-              Simulator Live
+              Demo Simulator
             </span>
           </div>
 
           <p className="text-neutral-500 dark:text-neutral-400 text-xs mb-4 leading-relaxed font-sans">
-            Simulate arena emergency triggers to test AI pathing algorithms, volunteer alerts, and the dynamic exit mapping overlay.
+            Simulate arena emergency triggers to test pathing concepts and the dynamic exit-mapping overlay. No real alerts or dispatches are sent.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -77,13 +77,13 @@ export default function EmergencyAccessibility({ emergencyState, setEmergencySta
               <div className="flex justify-between items-center text-xs">
                 <span className="text-[#e2ff70] font-bold uppercase tracking-wider flex items-center font-mono">
                   <ShieldAlert className="w-4 h-4 mr-1.5" />
-                  INCIDENT: {emergencyState.type}
+                  SIMULATED INCIDENT: {emergencyState.type}
                 </span>
                 <button
                   onClick={clearIncident}
                   className="bg-white dark:bg-neutral-800 text-black dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700 px-3 py-1 rounded-full text-[9px] font-bold cursor-pointer transition-all border border-white dark:border-neutral-700"
                 >
-                  Clear Alarm
+                  Clear Simulation
                 </button>
               </div>
 
@@ -120,7 +120,7 @@ export default function EmergencyAccessibility({ emergencyState, setEmergencySta
         {emergencyState.active && (
           <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-3 rounded-xl flex items-center space-x-2 mt-4 text-[9px] font-mono text-neutral-500 dark:text-neutral-450">
             <Bell className="w-4 h-4 text-neutral-850 dark:text-neutral-200 animate-bounce" />
-            <span>Operational logs updated. First responders notified.</span>
+            <span>Simulated operational log updated. No first responders were notified.</span>
           </div>
         )}
       </div>
@@ -134,7 +134,7 @@ export default function EmergencyAccessibility({ emergencyState, setEmergencySta
               <h3 className="text-sm font-bold tracking-wider text-neutral-400 uppercase font-mono">Accessibility Services</h3>
             </div>
             <span className="text-[10px] font-mono bg-neutral-100 dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400 px-2 py-0.5 rounded-full font-bold">
-              ADA Compliant
+              Demo Services
             </span>
           </div>
 
@@ -172,9 +172,9 @@ export default function EmergencyAccessibility({ emergencyState, setEmergencySta
               </div>
 
               {shuttleRequested ? (
-                <div className="bg-[#e2ff70] text-black border border-neutral-300 p-3 rounded-xl flex items-center space-x-2 text-xs font-bold shadow-sm animate-pulse">
+                <div className="bg-[#e2ff70] text-black border border-neutral-300 p-3 rounded-xl flex items-center space-x-2 text-xs font-bold shadow-sm animate-pulse" role="status">
                   <CheckCircle className="w-4 h-4 text-black" />
-                  <span>Cart #3 dispatched to Gate 7. ETA: 4m.</span>
+                  <span>Demo: Cart #3 would be assigned to Gate 7. Estimated arrival: 4m.</span>
                 </div>
               ) : (
                 <button
@@ -208,7 +208,7 @@ export default function EmergencyAccessibility({ emergencyState, setEmergencySta
         </div>
 
         <div className="mt-4 p-3 bg-[#e2ff70]/30 dark:bg-[#e2ff70]/10 border border-[#e2ff70] rounded-xl text-[10px] text-neutral-700 dark:text-neutral-300 leading-normal font-mono">
-          AI Suggestion: Wheelchair assistance demand has historically spiked 10 minutes post-game. Stage all 8 shuttles near West exits by min 85.
+          Demo suggestion: wheelchair assistance demand may spike 10 minutes post-game. Validate any real staffing plan with the venue accessibility team.
         </div>
       </div>
 

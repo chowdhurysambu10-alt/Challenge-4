@@ -127,6 +127,7 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
               <button
                 key={tab}
                 onClick={() => { setFilter(tab); setSelectedItemId(null); setActiveRoute(null); }}
+                aria-pressed={filter === tab}
                 className={`px-3 py-1.5 rounded-full uppercase font-mono text-[9px] tracking-wider transition-all cursor-pointer ${
                   filter === tab 
                     ? 'bg-[#121212] dark:bg-white text-white dark:text-black font-bold shadow-sm' 
@@ -140,12 +141,12 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
         </div>
 
         {/* Map Canvas */}
-        <div className="flex-1 min-h-[300px] md:min-h-[420px] bg-neutral-950 border border-neutral-900 rounded-2xl relative flex items-center justify-center overflow-hidden">
+        <div className="flex-1 min-h-[300px] md:min-h-[420px] bg-neutral-950 border border-neutral-900 rounded-2xl relative flex items-center justify-center overflow-hidden" role="region" aria-label="Interactive stadium floor plan">
           <div className="absolute top-4 left-4 text-[9px] font-mono text-neutral-550 tracking-widest">
             CAD_ENGINE: ONLINE
           </div>
 
-          <svg viewBox="0 0 400 300" className="w-full h-full max-w-[550px] aspect-[4/3] text-neutral-800 z-10">
+          <svg viewBox="0 0 400 300" className="w-full h-full max-w-[550px] aspect-[4/3] text-neutral-800 z-10" aria-hidden="true">
             <ellipse cx="200" cy="150" rx="180" ry="135" fill="none" stroke="#262626" strokeWidth="1" />
             <ellipse cx="200" cy="150" rx="155" ry="115" fill="none" stroke="#262626" strokeWidth="1.5" />
             <ellipse cx="200" cy="150" rx="125" ry="92" fill="none" stroke="#1d1d1d" strokeWidth="1" />
@@ -196,6 +197,8 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
                 <button
                   key={marker.id}
                   onClick={() => handleMarkerClick(marker)}
+                  aria-label={`${marker.name}. ${marker.description}${marker.waitTime ? ` Wait time ${marker.waitTime} minutes.` : ''}`}
+                  aria-pressed={isSelected}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full border text-xs font-mono font-bold cursor-pointer transition-all duration-300 ${getMarkerColor(marker.waitTime > 20 ? 'high' : marker.waitTime > 10 ? 'moderate' : 'low', marker.type)} ${
                     isSelected ? 'ring-2 ring-white scale-125 z-40 animate-none' : 'hover:scale-110 z-30'
                   }`}

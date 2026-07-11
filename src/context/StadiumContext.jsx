@@ -46,11 +46,11 @@ export function StadiumProvider({ children }) {
   };
 
   const handleDispatchStaff = () => {
-    addNotification("system-alert", "Steward dispatch ordered for congestion management.");
+    addNotification("system-alert", "Demo dispatch recorded for congestion-management review. No staff were contacted.");
   };
 
   const handleTriggerBroadcastRedirect = () => {
-    addNotification("ai-suggestion", "Rerouting alert broadcasted to stadium entry channels.");
+    addNotification("ai-suggestion", "Demo rerouting broadcast recorded. No stadium channels were contacted.");
   };
 
   const handleSelectDestinationForNav = (destinationName) => {
@@ -61,7 +61,7 @@ export function StadiumProvider({ children }) {
   const enterDashboard = (mode) => {
     setCurrentView('dashboard');
     setActiveTab(mode === 'ops' ? 'ops' : 'fan');
-    addNotification('info', `Authorized session: ${mode === 'ops' ? 'Operations Dispatcher' : 'Fan Support'}.`);
+    addNotification('info', `Demo session: ${mode === 'ops' ? 'Operations view' : 'Fan support view'}.`);
   };
 
   const exitSession = () => {

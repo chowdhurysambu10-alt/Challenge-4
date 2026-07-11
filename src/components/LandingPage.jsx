@@ -84,6 +84,7 @@ export default function LandingPage({ onEnter }) {
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button
               onClick={() => setViewMode('fan')}
+              aria-pressed={viewMode === 'fan'}
               className={`flex-1 flex items-center justify-between p-4 rounded-3xl border transition-all ${
                 viewMode === 'fan' 
                   ? 'bg-[#e2ff70] text-[#121212] border-[#e2ff70] shadow-md font-bold' 
@@ -102,6 +103,7 @@ export default function LandingPage({ onEnter }) {
 
             <button
               onClick={() => setViewMode('ops')}
+              aria-pressed={viewMode === 'ops'}
               className={`flex-1 flex items-center justify-between p-4 rounded-3xl border transition-all ${
                 viewMode === 'ops' 
                   ? 'bg-[#e2ff70] text-[#121212] border-[#e2ff70] shadow-md font-bold' 
@@ -111,8 +113,8 @@ export default function LandingPage({ onEnter }) {
               <div className="flex items-center space-x-3 text-left">
                 <Shield className="w-5 h-5" />
                 <div>
-                  <h3 className="font-bold text-xs uppercase tracking-wide">Staff Panel</h3>
-                  <p className={`text-[9px] ${viewMode === 'ops' ? 'text-neutral-700' : 'text-neutral-500'}`}>AI Dispatch & Heatmaps</p>
+                  <h3 className="font-bold text-xs uppercase tracking-wide">Staff Demo Panel</h3>
+                  <p className={`text-[9px] ${viewMode === 'ops' ? 'text-neutral-700' : 'text-neutral-500'}`}>Simulated dispatch & heatmaps</p>
                 </div>
               </div>
               {viewMode === 'ops' && <div className="w-2 h-2 rounded-full bg-[#121212]" />}
@@ -129,7 +131,7 @@ export default function LandingPage({ onEnter }) {
                 : 'bg-[#121212] text-white hover:bg-neutral-900 cursor-pointer shadow-md'
             }`}
           >
-            <span>Launch Command Center</span>
+            <span>Launch Demo Command Center</span>
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </button>
         </div>
@@ -182,11 +184,11 @@ export default function LandingPage({ onEnter }) {
       {/* Footer */}
       <footer className="z-10 w-full flex flex-col md:flex-row justify-between items-center text-xs text-neutral-400 gap-4 mt-8">
         <div>
-          © 2026 FIFA Operations. Submitted for "Smart Stadiums & Tournament Operations" Challenge.
+          © 2026 FIFA Copilot prototype. Submitted for "Smart Stadiums & Tournament Operations" Challenge.
         </div>
         <div className="flex space-x-6">
-          <span className="flex items-center"><Shield className="w-3.5 h-3.5 mr-1" /> Secure Core</span>
-          <span className="flex items-center"><Activity className="w-3.5 h-3.5 mr-1" /> 99.98% Telemetry SLA</span>
+          <span className="flex items-center"><Shield className="w-3.5 h-3.5 mr-1" /> Demo-only controls</span>
+          <span className="flex items-center"><Activity className="w-3.5 h-3.5 mr-1" /> Simulated telemetry</span>
         </div>
       </footer>
     </div>
