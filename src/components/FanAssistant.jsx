@@ -1,8 +1,33 @@
+/**
+ * FanAssistant.jsx - GenAI-grounded Smart Stadium Fan Assistant
+ * 
+ * DESIGN APPROACH:
+ * This component connects directly to the Anthropic API (Claude model "claude-sonnet-4-6")
+ * to provide intelligent, contextual guidance to stadium fans for the World Cup 2026.
+ * 
+ * To ensure answers are grounded in real-time stadium facts rather than hallucinated details,
+ * we inject a system prompt containing the live telemetry context (current gate wait times,
+ * zone densities, parking occupancies, weather, and safety/emergency status) pulled
+ * dynamically from StadiumContext.
+ * 
+ * MULTILINGUAL & OUTPUT CONTROL:
+ * The assistant is instructed to reply strictly in JSON format matching the schema:
+ * { "reply": "conversational answer", "reasoning": "underlying logic" }
+ * and to adapt to the currently selected language (en, es, fr, ar, hi, bn) within 2-3 sentences.
+ * 
+ * OFFLINE / EXCEPTION RESILIENCE:
+ * In case VITE_ANTHROPIC_API_KEY is not set or network errors occur, the assistant
+ * appends a developer notification and falls back automatically to its deterministic offline keyword
+ * engine, ensuring the prototype remains fully functional under any presentation condition.
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Globe, Sparkles, User, ArrowRight } from 'lucide-react';
+import { useStadium } from '../context/StadiumContext';
 import { fanChatTranslations } from '../data/mockData';
 
 export default function FanAssistant({ currentLanguage, setLanguage, addAlertNotification }) {
+  const { stadiumData } = useStadium();
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -26,7 +51,21 @@ export default function FanAssistant({ currentLanguage, setLanguage, addAlertNot
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSendMessage = (textToSend) => {
+  // JSON helper to clean up Markdown-wrapped JSON if Claude returns it in a code block
+  const parseJsonSafely = (rawText) => {
+    let cleaned = rawText.trim();
+    if (cleaned.startsWith("```json")) {
+      cleaned = cleaned.substring(7);
+    } else if (cleaned.startsWith("```")) {
+      cleaned = cleaned.substring(3);
+    }
+    if (cleaned.endsWith("```")) {
+      cleaned = cleaned.substring(0, cleaned.length - 3);
+    }
+    return JSON.parse(cleaned.trim());
+  };
+
+  const handleSendMessage = async (textToSend) => {
     if (!textToSend.trim()) return;
 
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -41,41 +80,185 @@ export default function FanAssistant({ currentLanguage, setLanguage, addAlertNot
     setInputValue('');
     setIsTyping(true);
 
-    setTimeout(() => {
+    const lowercaseText = textToSend.toLowerCase();
+
+    // 1. PRE-CHECK: Safety emergency overrides are handled instantly and deterministically
+    if (
+      lowercaseText.includes('emergency') || 
+      lowercaseText.includes('fire') || 
+      lowercaseText.includes('danger') || 
+      lowercaseText.includes('evacuate')
+    ) {
+      const aiReplyText = "⚠️ SECURITY ANNOUNCEMENT. Remain calm. Evacuate to the nearest exit point immediately. Follow stewards and security. Dynamic evacuation route layout overlays have been loaded on your stadium map.";
+      const aiReasonText = "Automated high-priority safety override trigger.";
+      addAlertNotification();
+      
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: aiReplyText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        reason: aiReasonText
+      }]);
+      setIsTyping(false);
+      return;
+    }
+
+    // Prepare offline fallback function for reuse
+    const runOfflineFallback = () => {
       let aiText = '';
       let aiReason = '';
-      const lowercaseText = textToSend.toLowerCase();
-
       if (lowercaseText.includes('seat') || lowercaseText.includes('block') || lowercaseText.includes('asiento') || lowercaseText.includes('siège') || lowercaseText.includes('आसन') || lowercaseText.includes('আসন')) {
         aiText = translations.responses.seat;
-        aiReason = "Derived from stadium seating layout registries.";
+        aiReason = "Offline Rule Engine: Resolved seat request from static stand charts.";
       } else if (lowercaseText.includes('food') || lowercaseText.includes('stall') || lowercaseText.includes('burger') || lowercaseText.includes('taco') || lowercaseText.includes('comida') || lowercaseText.includes('nourriture') || lowercaseText.includes('طعام') || lowercaseText.includes('भोजन') || lowercaseText.includes('খাবার')) {
         aiText = translations.responses.food;
-        aiReason = "Calculated based on closest concession lines and lowest flow averages.";
+        aiReason = "Offline Rule Engine: Found nearby concession names and estimated queue wait times.";
       } else if (lowercaseText.includes('parking') || lowercaseText.includes('car') || lowercaseText.includes('estacionamiento') || lowercaseText.includes('stationnement') || lowercaseText.includes('موقف') || lowercaseText.includes('पार्किंग') || lowercaseText.includes('পার্কিং')) {
         aiText = translations.responses.parking;
-        aiReason = "Derived from live loop barrier sensors at Lots A, B, C, D.";
+        aiReason = "Offline Rule Engine: Searched current lot capacity levels.";
       } else if (lowercaseText.includes('accessibility') || lowercaseText.includes('wheelchair') || lowercaseText.includes('disability') || lowercaseText.includes('accesibilidad') || lowercaseText.includes('accessibilité') || lowercaseText.includes('سيل') || lowercaseText.includes('सुगमता') || lowercaseText.includes('সহায়তা')) {
         aiText = translations.responses.access;
-        aiReason = "Filtered from stadium accessibility registries database.";
-      } else if (lowercaseText.includes('emergency') || lowercaseText.includes('fire') || lowercaseText.includes('danger') || lowercaseText.includes('evacuate')) {
-        aiText = "⚠️ SECURITY ANNOUNCEMENT. Remain calm. Evacuate to the nearest exit point immediately. Dynamic evacuation route layout overlays have been loaded on your stadium map.";
-        aiReason = "Automated high-priority safety override trigger.";
-        addAlertNotification();
+        aiReason = "Offline Rule Engine: Retrieved quiet room and elevator directions from ADA index.";
       } else {
         aiText = translations.responses.default;
-        aiReason = "Derived from crowd density telemetry models.";
+        aiReason = "Offline Rule Engine: Formulated default routing recommendation.";
       }
 
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
+        id: Date.now().toString() + '-offline',
         sender: 'ai',
         text: aiText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         reason: aiReason
       }]);
+    };
+
+    // 2. RETRIEVE API KEY AND INITIATE LIVE AI CALL
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+
+    if (!apiKey) {
+      // API Key warning
+      setMessages(prev => [...prev, {
+        id: Date.now().toString() + '-warning',
+        sender: 'ai',
+        text: "⚠️ VITE_ANTHROPIC_API_KEY is not configured in this environment. Falling back to the offline simulation core.",
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        reason: "Offline fallback mode: No VITE_ANTHROPIC_API_KEY detected in .env"
+      }]);
+      
+      // Delay slightly to feel conversational
+      setTimeout(() => {
+        runOfflineFallback();
+        setIsTyping(false);
+      }, 700);
+      return;
+    }
+
+    // Build context strings from live telemetry
+    const gatesInfo = stadiumData.gates.map(g => `- ${g.name}: wait time ${g.waitTime}m, density ${g.density}%, flow: ${g.currentFlow} fans/min, status: ${g.status}`).join('\n');
+    const zonesInfo = stadiumData.zones.map(z => `- ${z.name}: density ${z.density}%`).join('\n');
+    const parkingInfo = stadiumData.parking.map(p => `- ${p.name}: ${p.filled}% filled, flow: ${p.rate}, class: ${p.type}`).join('\n');
+    const weatherInfo = `${stadiumData.weather.condition}, Temp: ${stadiumData.weather.tempC}°C (${stadiumData.weather.tempF}°F), Wind: ${stadiumData.weather.windKmh}km/h`;
+    const emergencyInfo = stadiumData.emergencyState.active 
+      ? `ACTIVE EMERGENCY: ${stadiumData.emergencyState.type} at ${stadiumData.emergencyState.location}. Evacuation Route: ${stadiumData.emergencyState.evacRoute.join(' -> ')}` 
+      : 'All nominal. No safety incidents.';
+
+    // Construct grounded system prompt
+    const systemPrompt = `You are "FIFA Copilot 2026", the AI-powered Smart Stadium Assistant web app for the FIFA World Cup 2026 at the Hard Rock Stadium.
+You must help fans with seating location, concessions, restrooms, parking lot capacities, weather forecasts, transit and security directives.
+You MUST anchor your responses in the real-time stadium telemetry below:
+
+[LIVE TELEMETRY]
+GATES:
+${gatesInfo}
+
+STAND ZONES DENSITIES:
+${zonesInfo}
+
+PARKING:
+${parkingInfo}
+
+WEATHER:
+${weatherInfo}
+
+SAFETY INFRASTRUCTURE:
+${emergencyInfo}
+
+[INSTRUCTIONS]
+1. Respond strictly in the currently requested language: "${currentLanguage}" (en: English, es: Spanish, fr: French, ar: Arabic, hi: Hindi, bn: Bengali).
+2. Keep your answer brief (2-3 sentences max) since this is a compact stadium chat widget.
+3. You MUST respond strictly in valid JSON format matching the schema:
+{
+  "reply": "Your brief conversational message to the fan in the requested language.",
+  "reasoning": "A 1-sentence technical explanation (in English) outlining the live telemetry telemetry metrics or rules you used to determine this response."
+}
+Do not write any markdown code blocks or text outside the JSON. Return only the JSON object.`;
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-access-outside-of-browser": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: [
+            { role: "user", content: textToSend }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errText}`);
+      }
+
+      const responseData = await response.json();
+      const rawOutput = responseData.content[0].text;
+      
+      let parsedReply = '';
+      let parsedReasoning = '';
+
+      try {
+        const parsed = parseJsonSafely(rawOutput);
+        parsedReply = parsed.reply;
+        parsedReasoning = parsed.reasoning;
+      } catch (jsonErr) {
+        // Safe try/catch fallback if Claude failed to return valid JSON
+        parsedReply = rawOutput;
+        parsedReasoning = "API response was parsed as raw text. JSON structure failed.";
+      }
+
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        sender: 'ai',
+        text: parsedReply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        reason: parsedReasoning
+      }]);
+
+    } catch (err) {
+      console.error("API Call Failed: ", err);
+      // Append warning bubble about the network/API error
+      setMessages(prev => [...prev, {
+        id: Date.now().toString() + '-err',
+        sender: 'ai',
+        text: `⚠️ API Connection Issue: ${err.message || "Unable to reach Claude"}. Activating local core engine.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        reason: "Connection failure: Fallback to nominal rules."
+      }]);
+
+      // Fallback offline execution
+      runOfflineFallback();
+    } finally {
       setIsTyping(false);
-    }, 1000);
+    }
   };
 
   const triggerQuickAction = (actionKey) => {
@@ -164,7 +347,7 @@ export default function FanAssistant({ currentLanguage, setLanguage, addAlertNot
             <span className="w-1.5 h-1.5 rounded-full bg-[#121212] dark:bg-white animate-bounce" />
             <span className="w-1.5 h-1.5 rounded-full bg-[#121212] dark:bg-white animate-bounce [animation-delay:0.2s]" />
             <span className="w-1.5 h-1.5 rounded-full bg-[#121212] dark:bg-white animate-bounce [animation-delay:0.4s]" />
-            <span>Telemetry routing sync in progress...</span>
+            <span>AI Copilot is resolving telemetry...</span>
           </div>
         )}
         <div ref={chatEndRef} />
@@ -176,7 +359,7 @@ export default function FanAssistant({ currentLanguage, setLanguage, addAlertNot
           <button
             key={key}
             onClick={() => triggerQuickAction(key)}
-            className="bg-neutral-50 dark:bg-neutral-900 hover:bg-[#e2ff70] dark:hover:bg-[#e2ff70] text-[#121212] dark:text-white dark:hover:text-black border border-neutral-200 dark:border-neutral-800 px-4 py-2 rounded-full text-[10px] font-bold flex items-center transition-all cursor-pointer shadow-sm hover:scale-102"
+            className="bg-neutral-50 dark:bg-neutral-900 hover:bg-[#e2ff70] dark:hover:bg-[#e2ff70] text-[#121212] dark:text-white dark:hover:text-black border border-neutral-200 dark:border-neutral-880 px-4 py-2 rounded-full text-[10px] font-bold flex items-center transition-all cursor-pointer shadow-sm hover:scale-102"
           >
             <span>{translations.quickActions[key]}</span>
             <ArrowRight className="w-3 h-3 ml-1 opacity-60" />

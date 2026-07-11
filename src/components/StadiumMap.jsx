@@ -1,22 +1,22 @@
 import React, { useState } from 'react';
 import { Navigation, Coffee, MapPin, Eye, Compass, ShieldAlert, Accessibility } from 'lucide-react';
 
-export default function StadiumMap({ _gates, _zones, emergencyState, selectDestinationForNav }) {
+export default function StadiumMap({ gates, zones, emergencyState, selectDestinationForNav }) {
   const [filter, setFilter] = useState('all');
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedItemId, setSelectedItemId] = useState(null);
   const [activeRoute, setActiveRoute] = useState(null);
 
-  // Map markers
-  const markers = [
+  // Static positions and metadata for markers
+  const baseMarkers = [
     // Gates
-    { id: 'gate-1', type: 'gate', name: 'Gate 1 (Zone A)', x: 200, y: 28, status: 'low', waitTime: 8, description: 'North Gate - Near light rail' },
-    { id: 'gate-2', type: 'gate', name: 'Gate 2 (Zone A)', x: 310, y: 65, status: 'moderate', waitTime: 14, description: 'North-East Access' },
-    { id: 'gate-3', type: 'gate', name: 'Gate 3 (Zone B)', x: 365, y: 150, status: 'high', waitTime: 26, description: 'East Concourse - High Flow' },
-    { id: 'gate-4', type: 'gate', name: 'Gate 4 (Zone B)', x: 310, y: 235, status: 'high', waitTime: 22, description: 'South-East Main Gate' },
-    { id: 'gate-5', type: 'gate', name: 'Gate 5 (Zone C)', x: 200, y: 272, status: 'low', waitTime: 7, description: 'South Gate - Shuttle Bus link' },
-    { id: 'gate-6', type: 'gate', name: 'Gate 6 (Zone C)', x: 90, y: 235, status: 'low', waitTime: 9, description: 'South-West Gate' },
-    { id: 'gate-7', type: 'gate', name: 'Gate 7 (Zone D)', x: 35, y: 150, status: 'moderate', waitTime: 12, description: 'West Gate - VIP & Media' },
-    { id: 'gate-8', type: 'gate', name: 'Gate 8 (Zone D)', x: 90, y: 65, status: 'moderate', waitTime: 15, description: 'North-West Gate' },
+    { id: 'gate-1', type: 'gate', name: 'Gate 1 (Zone A)', x: 200, y: 28, waitTime: 8, status: 'low', description: 'North Gate - Near light rail connection' },
+    { id: 'gate-2', type: 'gate', name: 'Gate 2 (Zone A)', x: 310, y: 65, waitTime: 14, status: 'moderate', description: 'North-East Access Concourse' },
+    { id: 'gate-3', type: 'gate', name: 'Gate 3 (Zone B)', x: 365, y: 150, waitTime: 26, status: 'high', description: 'East Concourse - High Flow Main Gate' },
+    { id: 'gate-4', type: 'gate', name: 'Gate 4 (Zone B)', x: 310, y: 235, waitTime: 22, status: 'high', description: 'South-East Main Gate and VIP corridor' },
+    { id: 'gate-5', type: 'gate', name: 'Gate 5 (Zone C)', x: 200, y: 272, waitTime: 7, status: 'low', description: 'South Gate - Express shuttle bus terminal link' },
+    { id: 'gate-6', type: 'gate', name: 'Gate 6 (Zone C)', x: 90, y: 235, waitTime: 9, status: 'low', description: 'South-West Gate and volunteer command point' },
+    { id: 'gate-7', type: 'gate', name: 'Gate 7 (Zone D)', x: 35, y: 150, waitTime: 12, status: 'moderate', description: 'West Gate - Media, VIP, and accessible ramps' },
+    { id: 'gate-8', type: 'gate', name: 'Gate 8 (Zone D)', x: 90, y: 65, waitTime: 15, status: 'moderate', description: 'North-West Gate and general admissions' },
 
     // Food Stalls
     { id: 'food-1', type: 'food', name: 'Golden Goal Burgers', x: 240, y: 48, status: 'low', waitTime: 6, description: 'Zone A - Concourse Level 1' },
@@ -28,7 +28,7 @@ export default function StadiumMap({ _gates, _zones, emergencyState, selectDesti
     { id: 'restroom-1', type: 'restroom', name: 'Restroom A (North)', x: 160, y: 48, status: 'low', waitTime: 3, description: 'Zone A - Accessibility Equipped' },
     { id: 'restroom-2', type: 'restroom', name: 'Restroom B (East)', x: 345, y: 195, status: 'high', waitTime: 9, description: 'Zone B - Next to Gate 4' },
     { id: 'restroom-3', type: 'restroom', name: 'Restroom C (South)', x: 240, y: 252, status: 'low', waitTime: 2, description: 'Zone C - Accessibility Equipped' },
-    { id: 'restroom-4', type: 'restroom', name: 'Restroom D (West)', x: 60, y: 105, status: 'low', waitTime: 4, description: 'Zone D - Next to sensory room' },
+    { id: 'restroom-4', type: 'restroom', name: 'Restroom D (West)', x: 60, y: 105, status: 'low', waitTime: 4, description: 'Zone D - Next to sensory quiet room' },
 
     // Medical Hub
     { id: 'medical-1', type: 'medical', name: 'Medical Station Red Cross', x: 200, y: 245, status: 'low', waitTime: 0, description: 'Primary Medical Center (Zone C)' },
@@ -37,6 +37,35 @@ export default function StadiumMap({ _gates, _zones, emergencyState, selectDesti
     { id: 'access-1', type: 'access', name: 'Sensory Quiet Room 1', x: 65, y: 130, status: 'low', waitTime: 0, description: 'Zone D - Quiet space for sensory sensitive fans' },
     { id: 'access-2', type: 'access', name: 'Wheelchair Shuttle Gate', x: 50, y: 170, status: 'low', waitTime: 0, description: 'Zone D - Shuttle pickup point for mobility aids' },
   ];
+
+  // Dynamically map wait times and status values from parent gates telemetry context
+  const resolvedMarkers = baseMarkers.map(m => {
+    if (m.type === 'gate' && gates) {
+      const gateId = parseInt(m.id.split('-')[1]);
+      const liveGate = gates.find(g => g.id === gateId);
+      if (liveGate) {
+        return {
+          ...m,
+          waitTime: liveGate.waitTime,
+          status: liveGate.waitTime > 20 ? 'high' : liveGate.waitTime > 10 ? 'moderate' : 'low'
+        };
+      }
+    }
+    // Also update zone references for accessibility rooms if zones change
+    if (m.type === 'access' && zones) {
+      const zoneId = m.name.includes('Zone D') ? 'D' : '';
+      const liveZone = zones.find(z => z.id === zoneId);
+      if (liveZone) {
+        return {
+          ...m,
+          description: `${m.description} (Current Stand Density: ${liveZone.density}%)`
+        };
+      }
+    }
+    return m;
+  });
+
+  const selectedItem = resolvedMarkers.find(m => m.id === selectedItemId);
 
   // Preset paths
   const paths = {
@@ -49,7 +78,7 @@ export default function StadiumMap({ _gates, _zones, emergencyState, selectDesti
     'access-2': { from: 'Gate 7', path: 'M 35 150 C 40 160, 45 165, 50 170', text: 'Gate 7 to Shuttle pickup' },
   };
 
-  const filteredMarkers = markers.filter(m => {
+  const filteredMarkers = resolvedMarkers.filter(m => {
     if (filter === 'all') return true;
     if (filter === 'gates') return m.type === 'gate';
     if (filter === 'food') return m.type === 'food';
@@ -59,7 +88,7 @@ export default function StadiumMap({ _gates, _zones, emergencyState, selectDesti
   });
 
   const getMarkerColor = (status, type) => {
-    if (type === 'medical') return 'text-white bg-red-650 border-white shadow';
+    if (type === 'medical') return 'text-white bg-red-655 border-white shadow';
     if (type === 'access') return 'text-black bg-[#e2ff70] border-neutral-300 dark:border-neutral-700 shadow';
     if (status === 'low') return 'text-black dark:text-white bg-white dark:bg-neutral-800 border-neutral-250 dark:border-neutral-700 shadow-sm';
     if (status === 'moderate') return 'text-black bg-[#e2ff70] border-neutral-300 dark:border-neutral-600 shadow-sm';
@@ -68,7 +97,7 @@ export default function StadiumMap({ _gates, _zones, emergencyState, selectDesti
   };
 
   const handleMarkerClick = (marker) => {
-    setSelectedItem(marker);
+    setSelectedItemId(marker.id);
     if (paths[marker.id]) {
       setActiveRoute(paths[marker.id]);
     } else {
@@ -97,7 +126,7 @@ export default function StadiumMap({ _gates, _zones, emergencyState, selectDesti
             {['all', 'gates', 'food', 'restrooms', 'access'].map((tab) => (
               <button
                 key={tab}
-                onClick={() => { setFilter(tab); setSelectedItem(null); setActiveRoute(null); }}
+                onClick={() => { setFilter(tab); setSelectedItemId(null); setActiveRoute(null); }}
                 className={`px-3 py-1.5 rounded-full uppercase font-mono text-[9px] tracking-wider transition-all cursor-pointer ${
                   filter === tab 
                     ? 'bg-[#121212] dark:bg-white text-white dark:text-black font-bold shadow-sm' 
@@ -161,7 +190,7 @@ export default function StadiumMap({ _gates, _zones, emergencyState, selectDesti
             {filteredMarkers.map((marker) => {
               const leftPercent = (marker.x / 400) * 100;
               const topPercent = (marker.y / 300) * 100;
-              const isSelected = selectedItem && selectedItem.id === marker.id;
+              const isSelected = selectedItemId && selectedItemId === marker.id;
 
               return (
                 <button
