@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { 
   MessageSquare, 
   Map, 
@@ -13,20 +13,21 @@ import {
   LogOut, 
   ShieldAlert,
   ChevronRight,
-  Settings,
   Sun,
-  Moon
+  Moon,
+  Accessibility
 } from 'lucide-react';
 
 import { useStadium } from './context/StadiumContext';
 import LandingPage from './components/LandingPage';
-import FanAssistant from './components/FanAssistant';
-import StadiumMap from './components/StadiumMap';
-import TransportLogistics from './components/TransportLogistics';
-import EmergencyAccessibility from './components/EmergencyAccessibility';
-import OperationsPanel from './components/OperationsPanel';
 
+// Lazy load components for performance optimization & code splitting (Lighthouse score improvement)
+const FanAssistant = lazy(() => import('./components/FanAssistant'));
+const StadiumMap = lazy(() => import('./components/StadiumMap'));
 const CrowdDashboard = lazy(() => import('./components/CrowdDashboard'));
+const TransportLogistics = lazy(() => import('./components/TransportLogistics'));
+const EmergencyAccessibility = lazy(() => import('./components/EmergencyAccessibility'));
+const OperationsPanel = lazy(() => import('./components/OperationsPanel'));
 
 export default function App() {
   const {
@@ -49,7 +50,15 @@ export default function App() {
     handleTriggerBroadcastRedirect,
     handleSelectDestinationForNav,
     enterDashboard,
-    exitSession
+    exitSession,
+
+    // Accessibility contexts
+    highContrast,
+    setHighContrast,
+    textScale,
+    setTextScale,
+    colorBlindFilter,
+    setColorBlindFilter
   } = useStadium();
 
   const renderTabContent = () => {
@@ -59,6 +68,15 @@ export default function App() {
           <FanAssistant 
             currentLanguage={currentLanguage} 
             setLanguage={setLanguage}
+            addAlertNotification={() => 
+              handleSetEmergencyState({
+                active: true,
+                type: 'general',
+                location: 'Stadium Wide',
+                message: 'Emergency evacuation triggered via chatbot override.',
+                evacRoute: ['Exit corridors A, B, C, D']
+              })
+            }
           />
         );
       case 'map':
@@ -72,14 +90,12 @@ export default function App() {
         );
       case 'crowd':
         return (
-          <Suspense fallback={<div className="rounded-3xl bg-white p-6 text-sm text-neutral-600 shadow-sm dark:bg-[#121212] dark:text-neutral-300" role="status">Loading crowd intelligence…</div>}>
-            <CrowdDashboard
-              gates={stadiumData.gates}
-              zones={stadiumData.zones}
-              operationalInsights={stadiumData.operationalInsights}
-              triggerBroadcastRedirect={handleTriggerBroadcastRedirect}
-            />
-          </Suspense>
+          <CrowdDashboard 
+            gates={stadiumData.gates} 
+            zones={stadiumData.zones}
+            operationalInsights={stadiumData.operationalInsights}
+            triggerBroadcastRedirect={handleTriggerBroadcastRedirect}
+          />
         );
       case 'transit':
         return (
@@ -106,7 +122,7 @@ export default function App() {
           />
         );
       default:
-        return <div className="text-neutral-500">Module not found.</div>;
+        return <div className="text-neutral-500 font-mono">Module not found.</div>;
     }
   };
 
@@ -129,8 +145,19 @@ export default function App() {
 
   const activeItem = menuItems.find(m => m.id === activeTab);
 
+  // Apply CSS contrast & accessibility filters dynamically
+  const getColorBlindFilterStyle = () => {
+    if (colorBlindFilter === 'deuteranopia') return { filter: 'hue-rotate(20deg) saturate(90%)' };
+    if (colorBlindFilter === 'protanopia') return { filter: 'hue-rotate(-20deg) saturate(85%)' };
+    if (colorBlindFilter === 'tritanopia') return { filter: 'hue-rotate(180deg) saturate(95%)' };
+    return {};
+  };
+
   return (
-    <div className={darkMode ? "dark text-white" : "text-black"}>
+    <div 
+      className={`${darkMode ? "dark text-white" : "text-black"} ${highContrast ? "high-contrast" : ""}`}
+      style={{ ...getColorBlindFilterStyle(), fontSize: `${textScale * 100}%` }}
+    >
       <div className="min-h-screen bg-[#f3f4f6] dark:bg-[#0a0a0a] text-[#121212] dark:text-white flex flex-col font-sans relative transition-colors duration-300">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-black">Skip to main content</a>
       
@@ -159,7 +186,7 @@ export default function App() {
         <aside id="primary-navigation" className={`w-72 md:w-20 lg:w-64 bg-[#121212] text-white flex-shrink-0 z-40 transition-transform duration-300 md:translate-x-0 m-4 rounded-[32px] flex flex-col justify-between p-5 shadow-2xl ${
           mobileMenuOpen ? 'translate-x-0 absolute top-0 bottom-0 left-0 border border-neutral-850' : '-translate-x-full absolute md:relative'
         }`}>
-          <div className="flex flex-col space-y-8">
+          <div className="flex flex-col space-y-6">
             {/* Sidebar Logo */}
             <div className="flex items-center space-x-3.5 px-2">
               <div className="w-10 h-10 bg-[#e2ff70] text-[#121212] flex items-center justify-center font-black text-lg rounded-2xl tracking-tighter">
@@ -190,9 +217,9 @@ export default function App() {
                     <div className={`p-2 rounded-xl flex items-center justify-center ${isActive ? 'bg-[#e2ff70] text-black' : 'bg-neutral-900 text-neutral-400'}`}>
                       <Icon className="w-5 h-5 flex-shrink-0" />
                     </div>
-                    <div className="md:hidden lg:block">
+                    <div className="md:hidden lg:block col-span-2">
                       <h4 className="font-bold text-xs uppercase tracking-wide leading-none">{item.label}</h4>
-                      <p className={`text-[9px] mt-0.5 font-light ${isActive ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                      <p className={`text-[9px] mt-0.5 font-light ${isActive ? 'text-neutral-500' : 'text-neutral-450'}`}>
                         {item.description}
                       </p>
                     </div>
@@ -202,11 +229,62 @@ export default function App() {
             </nav>
           </div>
 
+          {/* Interactive Accessibility settings panel inside the float navigation */}
+          <div className="md:hidden lg:block border-t border-neutral-900 pt-4 mt-4 space-y-3 px-1">
+            <span className="text-[9px] uppercase tracking-widest text-neutral-500 font-mono font-bold flex items-center">
+              <Accessibility className="w-3.5 h-3.5 mr-1" /> a11y cockpit
+            </span>
+            
+            {/* Contrast toggle */}
+            <button 
+              onClick={() => setHighContrast(!highContrast)}
+              className={`w-full py-1.5 px-3 rounded-xl text-[10px] font-mono font-bold flex justify-between items-center transition-all cursor-pointer ${
+                highContrast ? 'bg-[#e2ff70] text-black' : 'bg-neutral-900 text-neutral-450 hover:text-white'
+              }`}
+            >
+              <span>Contrast Plus</span>
+              <span className="text-[8px] border px-1 py-0.5 rounded uppercase leading-none border-neutral-700">
+                {highContrast ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            {/* Text Scale slider buttons */}
+            <div className="flex justify-between items-center bg-neutral-900 rounded-xl p-1 text-[10px] font-mono text-neutral-450">
+              <button 
+                onClick={() => setTextScale(Math.max(1, textScale - 0.15))}
+                className="px-2 py-1 hover:text-white cursor-pointer"
+                title="Decrease Text Size"
+              >
+                A-
+              </button>
+              <span className="text-white font-bold">{Math.round(textScale * 100)}%</span>
+              <button 
+                onClick={() => setTextScale(Math.min(1.45, textScale + 0.15))}
+                className="px-2 py-1 hover:text-white cursor-pointer"
+                title="Increase Text Size"
+              >
+                A+
+              </button>
+            </div>
+
+            {/* Color blind selector menu */}
+            <select
+              value={colorBlindFilter}
+              onChange={(e) => setColorBlindFilter(e.target.value)}
+              className="w-full bg-neutral-900 text-neutral-400 text-[10px] font-mono p-1.5 rounded-xl border border-neutral-850 focus:outline-none cursor-pointer"
+            >
+              <option value="none">Normal Colorblind</option>
+              <option value="deuteranopia">Deuteranopia (Red-Green)</option>
+              <option value="protanopia">Protanopia (Red-Green)</option>
+              <option value="tritanopia">Tritanopia (Blue-Yellow)</option>
+            </select>
+          </div>
+
           {/* Sidebar Footer details */}
-          <div className="space-y-4">
+          <div className="space-y-4 border-t border-neutral-900 pt-4">
             <button 
               onClick={exitSession}
-              className="w-full flex items-center space-x-3 p-3 rounded-2xl text-neutral-400 hover:text-white hover:bg-neutral-900/60 transition-all cursor-pointer text-left text-xs uppercase font-mono font-bold"
+              className="w-full flex items-center space-x-3 p-3 rounded-2xl text-neutral-450 hover:text-white hover:bg-neutral-900/60 transition-all cursor-pointer text-left text-xs uppercase font-mono font-bold"
             >
               <div className="p-2 bg-neutral-900 rounded-xl">
                 <LogOut className="w-5 h-5" />
@@ -214,7 +292,7 @@ export default function App() {
               <span className="md:hidden lg:inline">Exit Session</span>
             </button>
 
-            <div className="md:hidden lg:block border-t border-neutral-900 pt-4 font-mono text-[9px] text-neutral-500 leading-normal">
+            <div className="md:hidden lg:block font-mono text-[9px] text-neutral-500 leading-normal">
               <div className="flex justify-between">
                 <span>Core sync</span>
                 <span className="text-[#e2ff70]">OK</span>
@@ -224,7 +302,7 @@ export default function App() {
         </aside>
 
         {/* Main Content Workspace on the Right */}
-          <main id="main-content" tabIndex="-1" className="flex-1 p-6 md:p-10 flex flex-col justify-between overflow-y-auto max-w-7xl mx-auto w-full">
+        <main id="main-content" tabIndex="-1" className="flex-1 p-6 md:p-10 flex flex-col justify-between overflow-y-auto max-w-7xl mx-auto w-full">
           
           <div className="space-y-8">
             {/* Header: matches screenshot layout */}
@@ -234,7 +312,7 @@ export default function App() {
                   {/* Mobile navigation trigger */}
                   <button 
                     onClick={() => setMobileMenuOpen(prev => !prev)}
-                    aria-label={mobileMenuOpen ? 'Close stadium module navigation' : 'Open stadium module navigation'}
+                    aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
                     aria-expanded={mobileMenuOpen}
                     aria-controls="primary-navigation"
                     className="md:hidden p-1.5 rounded-xl border border-neutral-300 dark:border-neutral-750 text-neutral-650 hover:text-black dark:hover:text-white cursor-pointer bg-white dark:bg-neutral-900"
@@ -248,43 +326,25 @@ export default function App() {
                   <ChevronRight className="w-3 h-3 text-neutral-400 dark:text-neutral-600" />
                   
                   {/* Dashed setting badge like the screenshot */}
-                  <span className="inline-flex items-center space-x-1 border border-dashed border-neutral-400 dark:border-neutral-750 px-2 py-0.5 rounded-full text-[9px] font-mono text-neutral-600 dark:text-neutral-400">
-                    <Settings className="w-2.5 h-2.5 animate-spin" style={{ animationDuration: '6s' }} />
-                    <span>STAD_SENSORS</span>
-                  </span>
-
-                  {/* Active Indicator */}
-                  <span className="bg-[#e2ff70] text-[#121212] px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider font-mono">
-                    SIMULATION
-                  </span>
+                  <div className="text-[9px] tracking-wider uppercase font-mono font-bold px-2 py-0.5 bg-[#e2ff70] border border-dashed border-neutral-400 dark:border-neutral-700 text-black rounded-full flex items-center space-x-1.5">
+                    <span>{activeItem ? activeItem.label : 'Dashboard'}</span>
+                  </div>
                 </div>
 
-                {/* Huge bold header layout styled like "Managing Your Team" */}
-                <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-none text-[#121212] dark:text-white uppercase max-w-2xl">
-                  Managing <span className="font-light text-neutral-500 dark:text-neutral-450">Stadium Arena</span> <br />
-                  and <span className="bg-[#e2ff70] px-3.5 py-0.5 inline-block rounded-full text-black border border-black transform rotate-[-1deg]">{activeItem?.label}</span>
-                </h1>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-3xl font-black tracking-tight text-neutral-800 dark:text-white uppercase font-display">
+                    Smart Arena Dashboard
+                  </h1>
+                </div>
               </div>
 
-              {/* Utility Panel */}
-              <div className="flex items-center space-x-3 self-start md:self-auto">
-                {/* Dark Mode Button */}
-                <button
-                  onClick={() => setDarkMode(prev => !prev)}
-                  aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-                  aria-pressed={darkMode}
-                  className="p-2.5 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 shadow-sm rounded-2xl text-neutral-600 dark:text-neutral-450 hover:text-black dark:hover:text-white transition-all cursor-pointer flex items-center justify-center"
-                  title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                >
-                  {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                </button>
-
-                {/* Language Selector */}
+              {/* Utility Header Actions */}
+              <div className="flex items-center space-x-3.5">
+                
+                {/* Language Indicator */}
                 <div className="flex items-center space-x-2 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 shadow-sm px-3.5 py-2 rounded-2xl">
                   <Globe className="w-4 h-4 text-neutral-500" />
-                  <label className="sr-only" htmlFor="dashboard-language">Dashboard language</label>
                   <select
-                    id="dashboard-language"
                     value={currentLanguage}
                     onChange={(e) => setLanguage(e.target.value)}
                     className="bg-transparent text-neutral-850 dark:text-neutral-200 text-xs font-mono font-bold border-none outline-none focus:ring-0 cursor-pointer"
@@ -302,8 +362,6 @@ export default function App() {
                 <div className="relative">
                   <button 
                     onClick={() => setShowNotificationsDropdown(prev => !prev)}
-                    aria-label="Toggle simulation notifications"
-                    aria-expanded={showNotificationsDropdown}
                     className="p-2 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 shadow-sm rounded-2xl text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-all cursor-pointer relative"
                   >
                     <Bell className="w-4 h-4" />
@@ -313,7 +371,7 @@ export default function App() {
                   </button>
 
                   {showNotificationsDropdown && (
-                    <div role="region" aria-label="Simulation notifications" className="absolute right-0 mt-3 w-80 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 rounded-3xl p-5 shadow-2xl z-50 space-y-3 font-mono text-[#121212] dark:text-white">
+                    <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 rounded-3xl p-5 shadow-2xl z-50 space-y-3 font-mono text-[#121212] dark:text-white">
                       <div className="flex justify-between items-center border-b border-neutral-100 dark:border-neutral-850 pb-2">
                         <span className="text-xs font-bold uppercase tracking-wider">IoT Logs</span>
                         <span className="w-2 h-2 rounded-full bg-[#e2ff70]" />
@@ -334,12 +392,24 @@ export default function App() {
                     </div>
                   )}
                 </div>
+
+                {/* Dark Mode Button */}
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className="p-2.5 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 shadow-sm rounded-2xl text-neutral-600 dark:text-neutral-450 hover:text-black dark:hover:text-white transition-all cursor-pointer flex items-center justify-center"
+                  title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                >
+                  {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
+
               </div>
             </div>
 
-            {/* Dashboard Sub-Modules */}
+            {/* Dashboard Sub-Modules Wrapped in Suspense Boundary */}
             <div className="relative">
-              {renderTabContent()}
+              <Suspense fallback={<div className="p-12 text-center text-xs font-mono text-neutral-500">Connecting to telemetry core...</div>}>
+                {renderTabContent()}
+              </Suspense>
             </div>
           </div>
 
@@ -347,7 +417,7 @@ export default function App() {
           <footer className="mt-12 pt-6 border-t border-neutral-200 dark:border-neutral-800 flex flex-col md:flex-row items-center justify-between text-xs text-neutral-500 gap-4 font-mono">
             <div className="flex items-center space-x-2.5">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#121212] dark:bg-[#e2ff70]" />
-              <span>Simulation sync: Nominal (0.4s latency)</span>
+              <span>Telemetry sync: Active (0.4s latency)</span>
             </div>
             <div>
               Match: <strong className="text-black dark:text-white">{stadiumData.stadiumStats.matchInfo.match} ({stadiumData.stadiumStats.matchInfo.timeText})</strong>

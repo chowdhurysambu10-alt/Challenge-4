@@ -1,5 +1,19 @@
+/**
+ * FanAssistant.jsx - GenAI-grounded Smart Stadium Fan Assistant
+ * 
+ * DESIGN APPROACH:
+ * This component connects to the local API server proxy (/api/chat) to query Google Gemini 2.5 Flash.
+ * To ensure answers are grounded in real-time stadium facts rather than hallucinated details,
+ * we send the live telemetry context (current gate wait times, zone densities, parking occupancies,
+ * weather, and safety/emergency status) pulled dynamically from StadiumContext.
+ * 
+ * ACCESSIBILITY & CONVERSATION MEMORY:
+ * - Integrates voice synthesis (Web Speech API) to speak responses when Voice Guidance is toggled on.
+ * - Stores local chat log history and maps it to the API payload to maintain short-term context memory.
+ */
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, Globe, Send, Sparkles, User } from 'lucide-react';
+import { ArrowRight, Globe, Send, Sparkles, User, Volume2, VolumeX } from 'lucide-react';
 import { useStadium } from '../context/StadiumContext';
 import { fanChatTranslations } from '../data/mockData';
 import { buildTelemetrySnapshot, getOfflineResponse, isEmergencyMessage } from '../lib/fanAssistant';
@@ -17,7 +31,7 @@ function createMessage({ sender, text, basis = '' }) {
 }
 
 export default function FanAssistant({ currentLanguage, setLanguage }) {
-  const { stadiumData } = useStadium();
+  const { stadiumData, voiceGuidance, setVoiceGuidance } = useStadium();
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -30,6 +44,7 @@ export default function FanAssistant({ currentLanguage, setLanguage }) {
     setMessages((currentMessages) => [...currentMessages, message].slice(-MAX_MESSAGES));
   }, []);
 
+  // Welcome message injection
   useEffect(() => {
     if (!hasInitializedRef.current) {
       appendMessage(createMessage({
@@ -47,7 +62,27 @@ export default function FanAssistant({ currentLanguage, setLanguage }) {
 
   useEffect(() => () => {
     requestControllerRef.current?.abort();
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
   }, []);
+
+  // Voice output function for accessibility narration
+  const speakTextAloud = (text) => {
+    if (!window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = currentLanguage === 'es' ? 'es-ES' :
+                     currentLanguage === 'fr' ? 'fr-FR' :
+                     currentLanguage === 'ar' ? 'ar-SA' :
+                     currentLanguage === 'hi' ? 'hi-IN' :
+                     currentLanguage === 'bn' ? 'bn-IN' : 'en-US';
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.error("Web Speech synthesis failed: ", err);
+    }
+  };
 
   const handleSendMessage = async (textToSend) => {
     const message = textToSend.trim();
@@ -57,19 +92,28 @@ export default function FanAssistant({ currentLanguage, setLanguage }) {
     setInputValue('');
     setIsTyping(true);
 
+    // 1. Safety Emergency keyword overrides
     if (isEmergencyMessage(message)) {
+      const safetyReply = 'For a real emergency, follow official venue announcements, use the nearest safe exit only when instructed, and alert nearby staff or emergency services. This demo cannot trigger or verify an emergency response.';
       appendMessage(createMessage({
         sender: 'ai',
-        text: 'For a real emergency, follow official venue announcements, use the nearest safe exit only when instructed, and alert nearby staff or emergency services. This demo cannot trigger or verify an emergency response.',
+        text: safetyReply,
         basis: 'Safety guidance; no simulated incident was created'
       }));
       setIsTyping(false);
+      if (voiceGuidance) speakTextAloud(safetyReply);
       return;
     }
 
     const controller = new AbortController();
     requestControllerRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
+
+    // Map conversation logs to API history array to enable memory
+    const historyPayload = messages.map(msg => ({
+      role: msg.sender === 'user' ? 'user' : 'model',
+      text: msg.text
+    })).slice(-8); // send last 8 messages of history context
 
     try {
       const response = await fetch('/api/chat', {
@@ -78,6 +122,7 @@ export default function FanAssistant({ currentLanguage, setLanguage }) {
         body: JSON.stringify({
           message,
           language: currentLanguage,
+          history: historyPayload,
           telemetry: buildTelemetrySnapshot(stadiumData)
         }),
         signal: controller.signal
@@ -93,13 +138,23 @@ export default function FanAssistant({ currentLanguage, setLanguage }) {
         text: responseBody.reply,
         basis: responseBody.basis || 'Live telemetry response'
       }));
+
+      // Speak response aloud if accessibility voice guidance is active
+      if (voiceGuidance) {
+        speakTextAloud(responseBody.reply);
+      }
     } catch {
       const fallback = getOfflineResponse(message, translations, stadiumData);
+      const fallbackText = fallback.reply;
       appendMessage(createMessage({
         sender: 'ai',
-        text: fallback.reply,
+        text: fallbackText,
         basis: `${fallback.basis}. Live assistant unavailable; using local demo data.`
       }));
+
+      if (voiceGuidance) {
+        speakTextAloud(fallbackText);
+      }
     } finally {
       window.clearTimeout(timeoutId);
       if (requestControllerRef.current === controller) {
@@ -124,28 +179,45 @@ export default function FanAssistant({ currentLanguage, setLanguage }) {
           <div>
             <div className="flex items-center space-x-1.5 font-sans">
               <h2 id="fan-assistant-heading" className="text-sm font-bold tracking-tight text-neutral-800 dark:text-white uppercase">Stadium Co-Pilot</h2>
-              <span className="bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-300 text-[8px] uppercase tracking-widest px-1.5 py-0.5 rounded-full font-mono font-bold">Demo</span>
+              <span className="bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-300 text-[8px] uppercase tracking-widest px-1.5 py-0.5 rounded-full font-mono font-bold">Live AI</span>
             </div>
             <p className="text-[10px] text-neutral-600 dark:text-neutral-300">Language-adaptive wayfinding helper</p>
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 bg-neutral-55 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 px-3 py-1.5 rounded-full">
-          <Globe className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-300" aria-hidden="true" />
-          <label className="sr-only" htmlFor="chat-language">Chat language</label>
-          <select
-            id="chat-language"
-            value={currentLanguage}
-            onChange={(event) => setLanguage(event.target.value)}
-            className="bg-transparent text-neutral-700 dark:text-neutral-200 text-[11px] font-mono border-none outline-none focus:ring-0 cursor-pointer font-bold"
+        <div className="flex items-center space-x-2">
+          {/* Voice Guidance Toggle */}
+          <button
+            onClick={() => setVoiceGuidance(!voiceGuidance)}
+            className={`p-1.5 rounded-full border transition-all ${
+              voiceGuidance 
+                ? 'bg-[#e2ff70] text-black border-[#e2ff70]' 
+                : 'bg-neutral-50 dark:bg-neutral-900 text-neutral-500 dark:text-neutral-450 border-neutral-200 dark:border-neutral-800'
+            }`}
+            title={voiceGuidance ? "Disable Voice Guidance" : "Enable Voice Guidance (Speak replies aloud)"}
+            aria-pressed={voiceGuidance}
           >
-            <option value="en">English (EN)</option>
-            <option value="es">Español (ES)</option>
-            <option value="fr">Français (FR)</option>
-            <option value="ar">العربية (AR)</option>
-            <option value="hi">हिन्दी (HI)</option>
-            <option value="bn">বাংলা (BN)</option>
-          </select>
+            {voiceGuidance ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+          </button>
+
+          {/* Language Selector */}
+          <div className="flex items-center space-x-2 bg-neutral-55 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 px-3 py-1.5 rounded-full">
+            <Globe className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-300" aria-hidden="true" />
+            <label className="sr-only" htmlFor="chat-language">Chat language</label>
+            <select
+              id="chat-language"
+              value={currentLanguage}
+              onChange={(event) => setLanguage(event.target.value)}
+              className="bg-transparent text-neutral-700 dark:text-neutral-200 text-[11px] font-mono border-none outline-none focus:ring-0 cursor-pointer font-bold"
+            >
+              <option value="en" className="bg-white dark:bg-black text-black dark:text-white">English (EN)</option>
+              <option value="es" className="bg-white dark:bg-black text-black dark:text-white">Español (ES)</option>
+              <option value="fr" className="bg-white dark:bg-black text-black dark:text-white">Français (FR)</option>
+              <option value="ar" className="bg-white dark:bg-black text-black dark:text-white">العربية (AR)</option>
+              <option value="hi" className="bg-white dark:bg-black text-black dark:text-white">हिन्दी (HI)</option>
+              <option value="bn" className="bg-white dark:bg-black text-black dark:text-white">বাংলা (BN)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -213,30 +285,27 @@ export default function FanAssistant({ currentLanguage, setLanguage }) {
       <form
         onSubmit={(event) => { event.preventDefault(); handleSendMessage(inputValue); }}
         className="flex items-center gap-2 bg-neutral-55 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-2 rounded-2xl shadow-inner"
-        aria-label="Send a message to Stadium Co-Pilot"
       >
-        <label className="sr-only" htmlFor="fan-chat-input">Ask Stadium Co-Pilot</label>
+        <label className="sr-only" htmlFor="chat-input-message">Message text</label>
         <input
-          id="fan-chat-input"
+          id="chat-input-message"
           type="text"
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
           placeholder="Ask Copilot (e.g. 'parking', 'seat block')"
-          maxLength={500}
-          disabled={isTyping}
-          className="flex-1 bg-transparent border-none text-xs text-neutral-850 dark:text-neutral-100 px-3 py-1 outline-none focus:ring-0 placeholder-neutral-500 font-medium disabled:cursor-not-allowed"
+          className="flex-1 bg-transparent border-none text-xs text-neutral-850 dark:text-neutral-250 px-3 py-1 outline-none focus:ring-0 placeholder-neutral-400 font-medium"
         />
         <button
           type="submit"
           disabled={!inputValue.trim() || isTyping}
-          aria-label="Send message"
           className={`p-2.5 rounded-xl transition-all ${
             inputValue.trim() && !isTyping
               ? 'bg-[#121212] dark:bg-white text-white dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-100 cursor-pointer shadow-sm'
-              : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
+              : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-600 cursor-not-allowed'
           }`}
         >
           <Send className="w-3.5 h-3.5" aria-hidden="true" />
+          <span className="sr-only">Send</span>
         </button>
       </form>
     </section>
