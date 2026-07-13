@@ -172,3 +172,96 @@
   animation: shimmer 2s infinite;
   content: '';
 }
+
+/* Accessibility: High Contrast overrides */
+.high-contrast {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+.high-contrast.dark,
+.high-contrast .dark {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+/* Ensure high contrast forces strong black/white text, solid borders, and clear focus indicators */
+.high-contrast button,
+.high-contrast select,
+.high-contrast input {
+  border: 2px solid #000000 !important;
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+.high-contrast.dark button,
+.high-contrast.dark select,
+.high-contrast.dark input,
+.high-contrast .dark button,
+.high-contrast .dark select,
+.high-contrast .dark input {
+  border: 2px solid #ffffff !important;
+  color: #ffffff !important;
+  background-color: #000000 !important;
+}
+
+.high-contrast a,
+.high-contrast p,
+.high-contrast span,
+.high-contrast h1,
+.high-contrast h2,
+.high-contrast h3,
+.high-contrast h4,
+.high-contrast h5,
+.high-contrast h6 {
+  color: #000000 !important;
+}
+
+.high-contrast.dark a,
+.high-contrast.dark p,
+.high-contrast.dark span,
+.high-contrast.dark h1,
+.high-contrast.dark h2,
+.high-contrast.dark h3,
+.high-contrast.dark h4,
+.high-contrast.dark h5,
+.high-contrast.dark h6,
+.high-contrast .dark a,
+.high-contrast .dark p,
+.high-contrast .dark span,
+.high-contrast .dark h1,
+.high-contrast .dark h2,
+.high-contrast .dark h3,
+.high-contrast .dark h4,
+.high-contrast .dark h5,
+.high-contrast .dark h6 {
+  color: #ffffff !important;
+}
+
+.high-contrast .bg-\[\#e2ff70\] {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 2px solid #000000 !important;
+}
+
+.high-contrast.dark .bg-\[\#e2ff70\],
+.high-contrast .dark .bg-\[\#e2ff70\] {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid #ffffff !important;
+}
+
+.high-contrast .border,
+.high-contrast .border-neutral-200,
+.high-contrast .border-neutral-100 {
+  border-color: #000000 !important;
+}
+
+.high-contrast.dark .border,
+.high-contrast.dark .border-neutral-800,
+.high-contrast.dark .border-neutral-850,
+.high-contrast .dark .border,
+.high-contrast .dark .border-neutral-800,
+.high-contrast .dark .border-neutral-850 {
+  border-color: #ffffff !important;
+}

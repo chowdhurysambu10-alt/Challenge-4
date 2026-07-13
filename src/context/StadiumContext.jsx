@@ -57,7 +57,9 @@ export function StadiumProvider({ children }) {
     ]);
   };
 
-  // Sync safety alarm triggers directly to Node API server
+const OPS_TOKEN = 'fifa-ops-token-2026-secure';
+
+// Sync safety alarm triggers directly to Node API server
   const handleSetEmergencyState = async (newState) => {
     // Optimistic local UI update
     setStadiumData(prev => ({
@@ -72,7 +74,10 @@ export function StadiumProvider({ children }) {
     try {
       const response = await fetch('/api/telemetry/emergency', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 
+          'content-type': 'application/json',
+          'Authorization': `Bearer ${OPS_TOKEN}`
+        },
         body: JSON.stringify(newState)
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -96,7 +101,12 @@ export function StadiumProvider({ children }) {
     }));
 
     try {
-      const response = await fetch('/api/telemetry/dispatch', { method: 'POST' });
+      const response = await fetch('/api/telemetry/dispatch', { 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPS_TOKEN}`
+        }
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (err) {
       console.error("API error syncing staff dispatches: ", err);
@@ -108,7 +118,12 @@ export function StadiumProvider({ children }) {
     addNotification("ai-suggestion", "Rerouting prompt transmitted to stand PA channels.");
     
     try {
-      const response = await fetch('/api/telemetry/broadcast', { method: 'POST' });
+      const response = await fetch('/api/telemetry/broadcast', { 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPS_TOKEN}`
+        }
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch (err) {
       console.error("API error syncing audio broadcasts: ", err);

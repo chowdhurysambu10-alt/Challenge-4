@@ -104,8 +104,8 @@ export function parseAssistantResponse(rawOutput) {
 }
 
 export async function requestAssistant(chatRequest, { apiKey, fetchImpl = fetch } = {}) {
-  // Graceful support for keys named either GEMINI_API_KEY or ANTHROPIC_API_KEY
-  const activeKey = apiKey || process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY;
+  // Consistently use GEMINI_API_KEY for the Gemini model integration
+  const activeKey = apiKey || process.env.GEMINI_API_KEY;
   if (!activeKey) {
     return { available: false, reason: 'The live AI service is not configured.' };
   }

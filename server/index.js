@@ -1,6 +1,31 @@
 import { createServer } from 'node:http';
 import { validateChatRequest, requestAssistant } from './chatService.js';
 import { initialMockData, updateMockData } from '../src/data/mockData.js';
+import { promises as fs } from 'node:fs';
+import { join, extname, dirname, resolve as pathResolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const DIST_DIR = pathResolve(__dirname, '../dist');
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf'
+};
 
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BODY_BYTES = 16_384;
@@ -14,11 +39,27 @@ const clients = new Set();
 // Master telemetry state stored in server memory
 let masterStadiumData = { ...initialMockData };
 
-// Start backend simulation loop updating sensor data every 6 seconds
+// Start backend simulation loop updating sensor data every 6 seconds if clients are connected
 setInterval(() => {
+  if (clients.size === 0) return;
   masterStadiumData = updateMockData(masterStadiumData);
   broadcastTelemetry(masterStadiumData);
 }, 6000);
+
+// Prune stale rate limit windows and dead SSE clients every 30 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, window] of requestWindows.entries()) {
+    if (now - window.startedAt >= RATE_LIMIT_WINDOW_MS) {
+      requestWindows.delete(ip);
+    }
+  }
+  for (const client of clients) {
+    if (client.destroyed || (client.socket && client.socket.destroyed)) {
+      clients.delete(client);
+    }
+  }
+}, 30000);
 
 function broadcastTelemetry(data) {
   const payload = `data: ${JSON.stringify(data)}\n\n`;
@@ -64,6 +105,14 @@ function canRequest(clientAddress) {
   return currentWindow.count <= RATE_LIMIT_MAX_REQUESTS;
 }
 
+const OPS_TOKEN = 'fifa-ops-token-2026-secure';
+
+function isAuthorized(request) {
+  const authHeader = request.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+  return token === OPS_TOKEN;
+}
+
 function readJson(request) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -92,6 +141,51 @@ function readJson(request) {
 const server = createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
 
+  // Handle static file serving for non-API requests (e.g. in production)
+  if (!requestUrl.pathname.startsWith('/api')) {
+    let filePath = join(DIST_DIR, requestUrl.pathname);
+    
+    // Safety check: prevent directory traversal
+    if (!filePath.startsWith(DIST_DIR)) {
+      sendJson(response, 403, { error: 'Forbidden' });
+      return;
+    }
+
+    try {
+      let stats = await fs.stat(filePath);
+      if (stats.isDirectory()) {
+        filePath = join(filePath, 'index.html');
+        stats = await fs.stat(filePath);
+      }
+
+      const ext = extname(filePath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      const content = await fs.readFile(filePath);
+
+      setSecurityHeaders(response);
+      const isHtml = ext === '.html';
+      response.writeHead(200, { 
+        'Content-Type': contentType,
+        'Cache-Control': isHtml ? 'no-store, no-cache, must-revalidate' : 'public, max-age=31536000, immutable' 
+      });
+      response.end(content);
+      return;
+    } catch {
+      // Fallback to index.html for Single Page Application routing (SPA)
+      try {
+        const indexPath = join(DIST_DIR, 'index.html');
+        const content = await fs.readFile(indexPath);
+        setSecurityHeaders(response);
+        response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        response.end(content);
+        return;
+      } catch {
+        sendJson(response, 404, { error: 'Not found.' });
+        return;
+      }
+    }
+  }
+
   // Endpoint: Health status
   if (request.method === 'GET' && requestUrl.pathname === '/api/health') {
     sendJson(response, 200, { status: 'ok', activeClients: clients.size });
@@ -103,8 +197,7 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
+      'Connection': 'keep-alive'
     });
     
     // Send immediate initial state
@@ -119,6 +212,14 @@ const server = createServer(async (request, response) => {
 
   // Endpoint: Emergency updates from dispatcher client
   if (request.method === 'POST' && requestUrl.pathname === '/api/telemetry/emergency') {
+    if (!isAuthorized(request)) {
+      sendJson(response, 401, { error: 'Unauthorized: Operations session check failed.' });
+      return;
+    }
+    if (!canRequest(getClientAddress(request))) {
+      sendJson(response, 429, { error: 'Too many requests. Please wait.' });
+      return;
+    }
     try {
       const emergency = await readJson(request);
       masterStadiumData.emergencyState = {
@@ -153,6 +254,14 @@ const server = createServer(async (request, response) => {
 
   // Endpoint: Volunteer Dispatch order updates
   if (request.method === 'POST' && requestUrl.pathname === '/api/telemetry/dispatch') {
+    if (!isAuthorized(request)) {
+      sendJson(response, 401, { error: 'Unauthorized: Operations session check failed.' });
+      return;
+    }
+    if (!canRequest(getClientAddress(request))) {
+      sendJson(response, 429, { error: 'Too many requests. Please wait.' });
+      return;
+    }
     try {
       const time = new Date();
       const timeStr = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
@@ -177,6 +286,14 @@ const server = createServer(async (request, response) => {
 
   // Endpoint: AI Broadcast Rerouting order updates
   if (request.method === 'POST' && requestUrl.pathname === '/api/telemetry/broadcast') {
+    if (!isAuthorized(request)) {
+      sendJson(response, 401, { error: 'Unauthorized: Operations session check failed.' });
+      return;
+    }
+    if (!canRequest(getClientAddress(request))) {
+      sendJson(response, 429, { error: 'Too many requests. Please wait.' });
+      return;
+    }
     try {
       const time = new Date();
       const timeStr = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;

@@ -44,7 +44,7 @@ Volunteer coordinator command center. Houses live KPI counters (Total checked-in
 *   **Styling**: Tailwind CSS v4 (minimalist monochrome layout with neon lime `#e2ff70` highlights)
 *   **Charts**: Recharts (gradient bar graphs & linear surge predictors)
 *   **Icons**: Lucide React
-*   **GenAI Engine**: Server-side Anthropic Messages API proxy (Claude `claude-sonnet-4-6` model)
+*   **GenAI Engine**: Google Gemini API via REST proxy (Gemini `gemini-2.5-flash` model)
 
 ---
 
@@ -78,9 +78,9 @@ Instead of relying on generic pre-trained answers or static lookup FAQs, FIFA Co
     ```
 
 3.  **Configure API Credentials**:
-    Create a `.env` file in the root directory and define your Anthropic API Key:
+    Create a `.env` file in the root directory and define your Gemini API Key:
     ```env
-    ANTHROPIC_API_KEY=your_anthropic_api_key_here
+    GEMINI_API_KEY=your_gemini_api_key_here
     ```
 
 4.  **Run the secure local API** (in one terminal):
@@ -104,4 +104,12 @@ Instead of relying on generic pre-trained answers or static lookup FAQs, FIFA Co
 
 ## 📸 Screenshots & Demonstrations
 
-*(Add visual GIFs/Screenshots of your command dashboard, SVG wayfinding overlays, and dark/light theme toggle here)*
+Here are the demonstrations of the smart stadium operations command center and interactive wayfinding systems:
+
+### 1. Operations Command Center & Telemetry Dashboard
+This dark-themed dashboard showcases real-time Circular Stand Density meters, live checked-in attendance ratios, volunteer steward count, and an active queue wait times bar chart.
+![Operations Dashboard](public/dashboard_demo.png)
+
+### 2. Interactive SVG Wayfinding Map
+Fans can select points of interest (food concessions, quiet sensory rooms, medical hubs) to highlight animated, dashed routing lines leading directly from the closest entry gates.
+![Interactive Stadium Map](public/wayfinding_demo.png)

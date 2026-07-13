@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts';
 import { TrendingUp, Sparkles, Volume2 } from 'lucide-react';
+import { useStadium } from '../context/StadiumContext';
 
 const SURGE_DATA = [
   { name: '+10m', predictedFans: 69500, loadFactor: 72 },
@@ -11,16 +12,23 @@ const SURGE_DATA = [
   { name: '+60m', predictedFans: 68500, loadFactor: 74 }
 ];
 
+const CHART_MARGIN_BAR = { top: 10, right: 10, left: -20, bottom: 0 };
+const CHART_MARGIN_LINE = { top: 10, right: 10, left: -15, bottom: 0 };
+const TOOLTIP_CONTENT_STYLE = { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px' };
+const TOOLTIP_LABEL_STYLE = { color: '#121212', fontFamily: 'monospace', fontSize: '10px', fontWeight: 'bold' };
+const TOOLTIP_ITEM_STYLE = { color: '#121212', fontSize: '12px' };
+
 export default function CrowdDashboard({ gates, zones, operationalInsights, triggerBroadcastRedirect }) {
   const [broadcastSentId, setBroadcastSentId] = useState(null);
+  const { highContrast } = useStadium();
 
-  const handleBroadcast = (id) => {
+  const handleBroadcast = useCallback((id) => {
     setBroadcastSentId(id);
     triggerBroadcastRedirect();
     setTimeout(() => {
       setBroadcastSentId(null);
     }, 3000);
-  };
+  }, [triggerBroadcastRedirect]);
 
   return (
     <div className="space-y-6 fade-in">
@@ -47,17 +55,21 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
                 <div 
                   key={zone.id} 
                   className={`border p-4 rounded-3xl flex flex-col justify-between transition-all duration-300 ${
-                    isHighlighted 
-                      ? 'bg-[#e2ff70] border-[#e2ff70] text-[#121212] shadow' 
-                      : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-800 dark:text-white hover:border-neutral-400 dark:hover:border-neutral-700'
+                    highContrast
+                      ? 'bg-white dark:bg-black border-4 border-black dark:border-white text-black dark:text-white font-extrabold shadow'
+                      : isHighlighted 
+                        ? 'bg-[#e2ff70] border-[#e2ff70] text-[#121212] shadow' 
+                        : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-800 dark:text-white hover:border-neutral-400 dark:hover:border-neutral-700'
                   }`}
                 >
                   <div className="flex justify-between items-start">
                     <span className="text-xs font-mono font-bold">{zone.id}</span>
                     <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-full ${
-                      isHighlighted 
-                        ? 'bg-[#121212] text-[#e2ff70]' 
-                        : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400'
+                      highContrast
+                        ? 'bg-black dark:bg-white text-white dark:text-black border border-neutral-300'
+                        : isHighlighted 
+                          ? 'bg-[#121212] text-[#e2ff70]' 
+                          : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400'
                     }`}>
                       {zone.density} / 100
                     </span>
@@ -73,7 +85,7 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
                             key={idx}
                             className={`w-3.5 h-7 rounded-full ${
                               filled 
-                                ? (isHighlighted ? 'bg-black' : 'bg-[#121212] dark:bg-white') 
+                                ? (highContrast ? 'bg-black dark:bg-white' : isHighlighted ? 'bg-black' : 'bg-[#121212] dark:bg-white') 
                                 : 'bg-transparent border border-dashed border-neutral-300 dark:border-neutral-700'
                             }`}
                           />
@@ -83,7 +95,11 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
                   </div>
 
                   <div className={`text-[9px] font-mono font-bold text-center truncate ${
-                    isHighlighted ? 'text-neutral-700' : 'text-neutral-400 dark:text-neutral-500'
+                    highContrast
+                      ? 'text-black dark:text-white'
+                      : isHighlighted 
+                        ? 'text-neutral-700' 
+                        : 'text-neutral-400 dark:text-neutral-555'
                   }`}>
                     {zone.name.split(' (')[0]}
                   </div>
@@ -108,7 +124,7 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
                     <span className="text-[8px] font-bold uppercase tracking-widest bg-[#e2ff70] dark:bg-black text-black dark:text-white px-2 py-0.5 rounded-full font-mono">
                       {insight.badge}
                     </span>
-                    <span className="text-[9px] font-mono text-neutral-400 dark:text-neutral-500">{insight.timestamp}</span>
+                    <span className="text-[9px] font-mono text-neutral-400 dark:text-neutral-555">{insight.timestamp}</span>
                   </div>
                   <p className="text-xs font-bold leading-normal">{insight.message}</p>
                 </div>
@@ -152,7 +168,7 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
 
           <div className="h-64 w-full" role="img" aria-label={`Gate wait-time chart. ${gates.map((gate) => `Gate ${gate.id}: ${gate.waitTime} minutes`).join('. ')}.`}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={gates} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={gates} margin={CHART_MARGIN_BAR}>
                 <defs>
                   <linearGradient id="splitBar" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#121212" />
@@ -181,9 +197,9 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
                 />
                 <Tooltip
                   cursor={{ fill: 'rgba(0, 0, 0, 0.02)' }}
-                  contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px' }}
-                  labelStyle={{ color: '#121212', fontFamily: 'monospace', fontSize: '10px', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#121212', fontSize: '12px' }}
+                  contentStyle={TOOLTIP_CONTENT_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
+                  itemStyle={TOOLTIP_ITEM_STYLE}
                   formatter={(value) => [`${value} minutes`, 'Wait Time']}
                   labelFormatter={(label) => `Gate ${label}`}
                 />
@@ -212,7 +228,7 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
 
           <div className="h-64 w-full font-mono" role="img" aria-label={`Predicted crowd-load chart. ${SURGE_DATA.map((point) => `${point.name}: ${point.loadFactor} percent`).join('. ')}.`}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={SURGE_DATA} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+              <LineChart data={SURGE_DATA} margin={CHART_MARGIN_LINE}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" darkStroke="#1f1f1f" vertical={false} />
                 <XAxis 
                   dataKey="name" 
@@ -232,9 +248,9 @@ export default function CrowdDashboard({ gates, zones, operationalInsights, trig
                   unit="%"
                 />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px' }}
-                  labelStyle={{ color: '#121212', fontFamily: 'monospace', fontSize: '10px', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#121212', fontSize: '12px' }}
+                  contentStyle={TOOLTIP_CONTENT_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
+                  itemStyle={TOOLTIP_ITEM_STYLE}
                   formatter={(value) => [`${value}% Capacity`, 'Predicted Surge']}
                 />
                 <Line 

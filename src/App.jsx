@@ -61,6 +61,13 @@ export default function App() {
     setColorBlindFilter
   } = useStadium();
 
+  React.useEffect(() => {
+    document.documentElement.style.fontSize = `${textScale * 100}%`;
+    return () => {
+      document.documentElement.style.fontSize = '';
+    };
+  }, [textScale]);
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'fan':

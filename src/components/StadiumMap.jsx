@@ -1,115 +1,127 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Navigation, Coffee, MapPin, Eye, Compass, ShieldAlert, Accessibility } from 'lucide-react';
+import { useStadium } from '../context/StadiumContext';
+
+// Static positions and metadata for markers
+const baseMarkers = [
+  // Gates
+  { id: 'gate-1', type: 'gate', name: 'Gate 1 (Zone A)', x: 200, y: 28, waitTime: 8, status: 'low', description: 'North Gate - Near light rail connection' },
+  { id: 'gate-2', type: 'gate', name: 'Gate 2 (Zone A)', x: 310, y: 65, waitTime: 14, status: 'moderate', description: 'North-East Access Concourse' },
+  { id: 'gate-3', type: 'gate', name: 'Gate 3 (Zone B)', x: 365, y: 150, waitTime: 26, status: 'high', description: 'East Concourse - High Flow Main Gate' },
+  { id: 'gate-4', type: 'gate', name: 'Gate 4 (Zone B)', x: 310, y: 235, waitTime: 22, status: 'high', description: 'South-East Main Gate and VIP corridor' },
+  { id: 'gate-5', type: 'gate', name: 'Gate 5 (Zone C)', x: 200, y: 272, waitTime: 7, status: 'low', description: 'South Gate - Express shuttle bus terminal link' },
+  { id: 'gate-6', type: 'gate', name: 'Gate 6 (Zone C)', x: 90, y: 235, waitTime: 9, status: 'low', description: 'South-West Gate and volunteer command point' },
+  { id: 'gate-7', type: 'gate', name: 'Gate 7 (Zone D)', x: 35, y: 150, waitTime: 12, status: 'moderate', description: 'West Gate - Media, VIP, and accessible ramps' },
+  { id: 'gate-8', type: 'gate', name: 'Gate 8 (Zone D)', x: 90, y: 65, waitTime: 15, status: 'moderate', description: 'North-West Gate and general admissions' },
+
+  // Food Stalls
+  { id: 'food-1', type: 'food', name: 'Golden Goal Burgers', x: 240, y: 48, status: 'low', waitTime: 6, description: 'Zone A - Concourse Level 1' },
+  { id: 'food-2', type: 'food', name: 'Kickoff Tacos', x: 345, y: 105, status: 'moderate', waitTime: 12, description: 'Zone B - Block 118 Concourse' },
+  { id: 'food-3', type: 'food', name: 'Header Hotdogs', x: 160, y: 252, status: 'low', waitTime: 4, description: 'Zone C - Block 204' },
+  { id: 'food-4', type: 'food', name: 'World Cup Coffee', x: 60, y: 195, status: 'moderate', waitTime: 8, description: 'Zone D - Level 2' },
+
+  // Restrooms
+  { id: 'restroom-1', type: 'restroom', name: 'Restroom A (North)', x: 160, y: 48, status: 'low', waitTime: 3, description: 'Zone A - Accessibility Equipped' },
+  { id: 'restroom-2', type: 'restroom', name: 'Restroom B (East)', x: 345, y: 195, status: 'high', waitTime: 9, description: 'Zone B - Next to Gate 4' },
+  { id: 'restroom-3', type: 'restroom', name: 'Restroom C (South)', x: 240, y: 252, status: 'low', waitTime: 2, description: 'Zone C - Accessibility Equipped' },
+  { id: 'restroom-4', type: 'restroom', name: 'Restroom D (West)', x: 60, y: 105, status: 'low', waitTime: 4, description: 'Zone D - Next to sensory quiet room' },
+
+  // Medical Hub
+  { id: 'medical-1', type: 'medical', name: 'Medical Station Red Cross', x: 200, y: 245, status: 'low', waitTime: 0, description: 'Primary Medical Center (Zone C)' },
+
+  // Accessibility Zones
+  { id: 'access-1', type: 'access', name: 'Sensory Quiet Room 1', x: 65, y: 130, status: 'low', waitTime: 0, description: 'Zone D - Quiet space for sensory sensitive fans' },
+  { id: 'access-2', type: 'access', name: 'Wheelchair Shuttle Gate', x: 50, y: 170, status: 'low', waitTime: 0, description: 'Zone D - Shuttle pickup point for mobility aids' },
+];
+
+// Preset paths
+const paths = {
+  'food-1': { from: 'Gate 1', path: 'M 200 28 C 220 28, 235 35, 240 48', text: 'Gate 1 to Golden Goal Burgers' },
+  'food-2': { from: 'Gate 3', path: 'M 365 150 C 365 130, 355 115, 345 105', text: 'Gate 3 to Kickoff Tacos' },
+  'restroom-1': { from: 'Gate 1', path: 'M 200 28 C 180 28, 165 35, 160 48', text: 'Gate 1 to Restroom A' },
+  'restroom-2': { from: 'Gate 4', path: 'M 310 235 C 330 235, 340 215, 345 195', text: 'Gate 4 to Restroom B' },
+  'medical-1': { from: 'Gate 5', path: 'M 200 272 L 200 245', text: 'Gate 5 to Medical Station' },
+  'access-1': { from: 'Gate 7', path: 'M 35 150 C 45 150, 55 140, 65 130', text: 'Gate 7 to Sensory Room' },
+  'access-2': { from: 'Gate 7', path: 'M 35 150 C 40 160, 45 165, 50 170', text: 'Gate 7 to Shuttle pickup' },
+};
 
 export default function StadiumMap({ gates, zones, emergencyState, selectDestinationForNav }) {
   const [filter, setFilter] = useState('all');
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [activeRoute, setActiveRoute] = useState(null);
-
-  // Static positions and metadata for markers
-  const baseMarkers = [
-    // Gates
-    { id: 'gate-1', type: 'gate', name: 'Gate 1 (Zone A)', x: 200, y: 28, waitTime: 8, status: 'low', description: 'North Gate - Near light rail connection' },
-    { id: 'gate-2', type: 'gate', name: 'Gate 2 (Zone A)', x: 310, y: 65, waitTime: 14, status: 'moderate', description: 'North-East Access Concourse' },
-    { id: 'gate-3', type: 'gate', name: 'Gate 3 (Zone B)', x: 365, y: 150, waitTime: 26, status: 'high', description: 'East Concourse - High Flow Main Gate' },
-    { id: 'gate-4', type: 'gate', name: 'Gate 4 (Zone B)', x: 310, y: 235, waitTime: 22, status: 'high', description: 'South-East Main Gate and VIP corridor' },
-    { id: 'gate-5', type: 'gate', name: 'Gate 5 (Zone C)', x: 200, y: 272, waitTime: 7, status: 'low', description: 'South Gate - Express shuttle bus terminal link' },
-    { id: 'gate-6', type: 'gate', name: 'Gate 6 (Zone C)', x: 90, y: 235, waitTime: 9, status: 'low', description: 'South-West Gate and volunteer command point' },
-    { id: 'gate-7', type: 'gate', name: 'Gate 7 (Zone D)', x: 35, y: 150, waitTime: 12, status: 'moderate', description: 'West Gate - Media, VIP, and accessible ramps' },
-    { id: 'gate-8', type: 'gate', name: 'Gate 8 (Zone D)', x: 90, y: 65, waitTime: 15, status: 'moderate', description: 'North-West Gate and general admissions' },
-
-    // Food Stalls
-    { id: 'food-1', type: 'food', name: 'Golden Goal Burgers', x: 240, y: 48, status: 'low', waitTime: 6, description: 'Zone A - Concourse Level 1' },
-    { id: 'food-2', type: 'food', name: 'Kickoff Tacos', x: 345, y: 105, status: 'moderate', waitTime: 12, description: 'Zone B - Block 118 Concourse' },
-    { id: 'food-3', type: 'food', name: 'Header Hotdogs', x: 160, y: 252, status: 'low', waitTime: 4, description: 'Zone C - Block 204' },
-    { id: 'food-4', type: 'food', name: 'World Cup Coffee', x: 60, y: 195, status: 'moderate', waitTime: 8, description: 'Zone D - Level 2' },
-
-    // Restrooms
-    { id: 'restroom-1', type: 'restroom', name: 'Restroom A (North)', x: 160, y: 48, status: 'low', waitTime: 3, description: 'Zone A - Accessibility Equipped' },
-    { id: 'restroom-2', type: 'restroom', name: 'Restroom B (East)', x: 345, y: 195, status: 'high', waitTime: 9, description: 'Zone B - Next to Gate 4' },
-    { id: 'restroom-3', type: 'restroom', name: 'Restroom C (South)', x: 240, y: 252, status: 'low', waitTime: 2, description: 'Zone C - Accessibility Equipped' },
-    { id: 'restroom-4', type: 'restroom', name: 'Restroom D (West)', x: 60, y: 105, status: 'low', waitTime: 4, description: 'Zone D - Next to sensory quiet room' },
-
-    // Medical Hub
-    { id: 'medical-1', type: 'medical', name: 'Medical Station Red Cross', x: 200, y: 245, status: 'low', waitTime: 0, description: 'Primary Medical Center (Zone C)' },
-
-    // Accessibility Zones
-    { id: 'access-1', type: 'access', name: 'Sensory Quiet Room 1', x: 65, y: 130, status: 'low', waitTime: 0, description: 'Zone D - Quiet space for sensory sensitive fans' },
-    { id: 'access-2', type: 'access', name: 'Wheelchair Shuttle Gate', x: 50, y: 170, status: 'low', waitTime: 0, description: 'Zone D - Shuttle pickup point for mobility aids' },
-  ];
+  const { highContrast } = useStadium();
 
   // Dynamically map wait times and status values from parent gates telemetry context
-  const resolvedMarkers = baseMarkers.map(m => {
-    if (m.type === 'gate' && gates) {
-      const gateId = parseInt(m.id.split('-')[1]);
-      const liveGate = gates.find(g => g.id === gateId);
-      if (liveGate) {
-        return {
-          ...m,
-          waitTime: liveGate.waitTime,
-          status: liveGate.waitTime > 20 ? 'high' : liveGate.waitTime > 10 ? 'moderate' : 'low'
-        };
+  const resolvedMarkers = useMemo(() => {
+    return baseMarkers.map(m => {
+      if (m.type === 'gate' && gates) {
+        const gateId = parseInt(m.id.split('-')[1]);
+        const liveGate = gates.find(g => g.id === gateId);
+        if (liveGate) {
+          return {
+            ...m,
+            waitTime: liveGate.waitTime,
+            status: liveGate.waitTime > 20 ? 'high' : liveGate.waitTime > 10 ? 'moderate' : 'low'
+          };
+        }
       }
-    }
-    // Also update zone references for accessibility rooms if zones change
-    if (m.type === 'access' && zones) {
-      const zoneId = m.name.includes('Zone D') ? 'D' : '';
-      const liveZone = zones.find(z => z.id === zoneId);
-      if (liveZone) {
-        return {
-          ...m,
-          description: `${m.description} (Current Stand Density: ${liveZone.density}%)`
-        };
+      // Also update zone references for accessibility rooms if zones change
+      if (m.type === 'access' && zones) {
+        const zoneId = m.name.includes('Zone D') ? 'D' : '';
+        const liveZone = zones.find(z => z.id === zoneId);
+        if (liveZone) {
+          return {
+            ...m,
+            description: `${m.description} (Current Stand Density: ${liveZone.density}%)`
+          };
+        }
       }
+      return m;
+    });
+  }, [gates, zones]);
+
+  const selectedItem = useMemo(() => {
+    return resolvedMarkers.find(m => m.id === selectedItemId);
+  }, [resolvedMarkers, selectedItemId]);
+
+  const filteredMarkers = useMemo(() => {
+    return resolvedMarkers.filter(m => {
+      if (filter === 'all') return true;
+      if (filter === 'gates') return m.type === 'gate';
+      if (filter === 'food') return m.type === 'food';
+      if (filter === 'restrooms') return m.type === 'restroom';
+      if (filter === 'access') return m.type === 'access' || m.id === 'restroom-1' || m.id === 'restroom-3';
+      return true;
+    });
+  }, [resolvedMarkers, filter]);
+
+  const getMarkerColor = useCallback((status, type) => {
+    if (highContrast) {
+      if (type === 'medical') return 'text-white bg-red-655 border-2 border-black dark:border-white shadow font-extrabold';
+      return 'text-black dark:text-white bg-white dark:bg-black border-2 border-black dark:border-white shadow font-extrabold';
     }
-    return m;
-  });
-
-  const selectedItem = resolvedMarkers.find(m => m.id === selectedItemId);
-
-  // Preset paths
-  const paths = {
-    'food-1': { from: 'Gate 1', path: 'M 200 28 C 220 28, 235 35, 240 48', text: 'Gate 1 to Golden Goal Burgers' },
-    'food-2': { from: 'Gate 3', path: 'M 365 150 C 365 130, 355 115, 345 105', text: 'Gate 3 to Kickoff Tacos' },
-    'restroom-1': { from: 'Gate 1', path: 'M 200 28 C 180 28, 165 35, 160 48', text: 'Gate 1 to Restroom A' },
-    'restroom-2': { from: 'Gate 4', path: 'M 310 235 C 330 235, 340 215, 345 195', text: 'Gate 4 to Restroom B' },
-    'medical-1': { from: 'Gate 5', path: 'M 200 272 L 200 245', text: 'Gate 5 to Medical Station' },
-    'access-1': { from: 'Gate 7', path: 'M 35 150 C 45 150, 55 140, 65 130', text: 'Gate 7 to Sensory Room' },
-    'access-2': { from: 'Gate 7', path: 'M 35 150 C 40 160, 45 165, 50 170', text: 'Gate 7 to Shuttle pickup' },
-  };
-
-  const filteredMarkers = resolvedMarkers.filter(m => {
-    if (filter === 'all') return true;
-    if (filter === 'gates') return m.type === 'gate';
-    if (filter === 'food') return m.type === 'food';
-    if (filter === 'restrooms') return m.type === 'restroom';
-    if (filter === 'access') return m.type === 'access' || m.id === 'restroom-1' || m.id === 'restroom-3';
-    return true;
-  });
-
-  const getMarkerColor = (status, type) => {
     if (type === 'medical') return 'text-white bg-red-655 border-white shadow';
     if (type === 'access') return 'text-black bg-[#e2ff70] border-neutral-300 dark:border-neutral-700 shadow';
     if (status === 'low') return 'text-black dark:text-white bg-white dark:bg-neutral-800 border-neutral-250 dark:border-neutral-700 shadow-sm';
     if (status === 'moderate') return 'text-black bg-[#e2ff70] border-neutral-300 dark:border-neutral-600 shadow-sm';
     if (status === 'high') return 'text-white dark:text-black bg-[#121212] dark:bg-white border-neutral-900 dark:border-neutral-200 shadow-sm';
     return 'bg-neutral-500';
-  };
+  }, [highContrast]);
 
-  const handleMarkerClick = (marker) => {
+  const handleMarkerClick = useCallback((marker) => {
     setSelectedItemId(marker.id);
     if (paths[marker.id]) {
       setActiveRoute(paths[marker.id]);
     } else {
       setActiveRoute(null);
     }
-  };
+  }, []);
 
-  const handleNavigate = () => {
+  const handleNavigate = useCallback(() => {
     if (selectedItem) {
       selectDestinationForNav(selectedItem.name);
     }
-  };
+  }, [selectedItem, selectDestinationForNav]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in">
