@@ -84,6 +84,12 @@ export function StadiumProvider({ children }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
+      
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('API server is offline. Please make sure the operations backend is running on port 8787.');
+      }
+
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Login failed.');
       
@@ -113,6 +119,12 @@ export function StadiumProvider({ children }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, name, role })
       });
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('API server is offline. Please make sure the operations backend is running on port 8787.');
+      }
+
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Google login failed.');
 
