@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fifa-copilot-jwt-super-secret-key-2026';
+import { JWT_SECRET } from '../config/secrets.js';
 
 export function getAuthUser(request) {
   const authHeader = request.headers['authorization'] || '';

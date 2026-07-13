@@ -5,7 +5,7 @@ import { handleTelemetryRoutes } from '../server/routes/telemetryRoutes.js';
 import { initDb } from '../server/services/dbService.js';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fifa-copilot-jwt-super-secret-key-2026';
+import { JWT_SECRET } from '../server/config/secrets.js';
 
 function mockReadJson(data) {
   return () => Promise.resolve(data);
