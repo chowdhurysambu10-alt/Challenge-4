@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Navigation, Coffee, MapPin, Eye, Compass, ShieldAlert, Accessibility } from 'lucide-react';
+import { Navigation, Coffee, MapPin, Eye, Compass, ShieldAlert, Accessibility, Flag } from 'lucide-react';
 import { useStadium } from '../context/StadiumContext';
 
 // Static positions and metadata for markers
@@ -34,24 +34,13 @@ const baseMarkers = [
   { id: 'access-2', type: 'access', name: 'Wheelchair Shuttle Gate', x: 50, y: 170, status: 'low', waitTime: 0, description: 'Zone D - Shuttle pickup point for mobility aids' },
 ];
 
-// Preset paths
-const paths = {
-  'food-1': { from: 'Gate 1', path: 'M 200 28 C 220 28, 235 35, 240 48', text: 'Gate 1 to Golden Goal Burgers' },
-  'food-2': { from: 'Gate 3', path: 'M 365 150 C 365 130, 355 115, 345 105', text: 'Gate 3 to Kickoff Tacos' },
-  'restroom-1': { from: 'Gate 1', path: 'M 200 28 C 180 28, 165 35, 160 48', text: 'Gate 1 to Restroom A' },
-  'restroom-2': { from: 'Gate 4', path: 'M 310 235 C 330 235, 340 215, 345 195', text: 'Gate 4 to Restroom B' },
-  'medical-1': { from: 'Gate 5', path: 'M 200 272 L 200 245', text: 'Gate 5 to Medical Station' },
-  'access-1': { from: 'Gate 7', path: 'M 35 150 C 45 150, 55 140, 65 130', text: 'Gate 7 to Sensory Room' },
-  'access-2': { from: 'Gate 7', path: 'M 35 150 C 40 160, 45 165, 50 170', text: 'Gate 7 to Shuttle pickup' },
-};
-
 export default function StadiumMap({ gates, zones, emergencyState, selectDestinationForNav }) {
   const [filter, setFilter] = useState('all');
+  const [startLocationId, setStartLocationId] = useState('gate-1');
   const [selectedItemId, setSelectedItemId] = useState(null);
-  const [activeRoute, setActiveRoute] = useState(null);
   const { highContrast } = useStadium();
 
-  // Dynamically map wait times and status values from parent gates telemetry context
+  // Dynamic status mapping from live telemetry props
   const resolvedMarkers = useMemo(() => {
     return baseMarkers.map(m => {
       if (m.type === 'gate' && gates) {
@@ -65,7 +54,6 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
           };
         }
       }
-      // Also update zone references for accessibility rooms if zones change
       if (m.type === 'access' && zones) {
         const zoneId = m.name.includes('Zone D') ? 'D' : '';
         const liveZone = zones.find(z => z.id === zoneId);
@@ -79,6 +67,10 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
       return m;
     });
   }, [gates, zones]);
+
+  const startNode = useMemo(() => {
+    return resolvedMarkers.find(m => m.id === startLocationId) || resolvedMarkers[0];
+  }, [resolvedMarkers, startLocationId]);
 
   const selectedItem = useMemo(() => {
     return resolvedMarkers.find(m => m.id === selectedItemId);
@@ -95,12 +87,47 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
     });
   }, [resolvedMarkers, filter]);
 
+  // Enterprise perimeter navigation curve logic
+  const dynamicRoutePath = useMemo(() => {
+    if (!startNode || !selectedItem || startNode.id === selectedItem.id) return null;
+    
+    const x1 = startNode.x;
+    const y1 = startNode.y;
+    const x2 = selectedItem.x;
+    const y2 = selectedItem.y;
+
+    const crossesField = (y1 < 120 && y2 > 180) || (y1 > 180 && y2 < 120) || (x1 < 140 && x2 > 260) || (x1 > 260 && x2 < 140);
+    
+    if (crossesField) {
+      // Calculate control point around the field perimeter corridor
+      const mx = (x1 + x2) / 2;
+      const my = (y1 + y2) / 2;
+      let cx = mx;
+      let cy = my;
+
+      if (Math.abs(mx - 200) < 60 && Math.abs(my - 150) < 45) {
+        cx = mx > 200 ? 320 : 80;
+        cy = my > 150 ? 230 : 70;
+      }
+      return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+    }
+    return `M ${x1} ${y1} L ${x2} ${y2}`;
+  }, [startNode, selectedItem]);
+
+  const estimatedDistance = useMemo(() => {
+    if (!startNode || !selectedItem) return 0;
+    const dx = startNode.x - selectedItem.x;
+    const dy = startNode.y - selectedItem.y;
+    // Scale viewBox pixels to approximate meters
+    return Math.round(Math.sqrt(dx * dx + dy * dy) * 1.3);
+  }, [startNode, selectedItem]);
+
   const getMarkerColor = useCallback((status, type) => {
     if (highContrast) {
-      if (type === 'medical') return 'text-white bg-red-655 border-2 border-black dark:border-white shadow font-extrabold';
+      if (type === 'medical') return 'text-white bg-red-600 border-2 border-black dark:border-white shadow font-extrabold';
       return 'text-black dark:text-white bg-white dark:bg-black border-2 border-black dark:border-white shadow font-extrabold';
     }
-    if (type === 'medical') return 'text-white bg-red-655 border-white shadow';
+    if (type === 'medical') return 'text-white bg-red-500 border-white shadow';
     if (type === 'access') return 'text-black bg-[#e2ff70] border-neutral-300 dark:border-neutral-700 shadow';
     if (status === 'low') return 'text-black dark:text-white bg-white dark:bg-neutral-800 border-neutral-250 dark:border-neutral-700 shadow-sm';
     if (status === 'moderate') return 'text-black bg-[#e2ff70] border-neutral-300 dark:border-neutral-600 shadow-sm';
@@ -110,11 +137,6 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
 
   const handleMarkerClick = useCallback((marker) => {
     setSelectedItemId(marker.id);
-    if (paths[marker.id]) {
-      setActiveRoute(paths[marker.id]);
-    } else {
-      setActiveRoute(null);
-    }
   }, []);
 
   const handleNavigate = useCallback(() => {
@@ -133,12 +155,11 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
             <h2 className="text-lg font-bold tracking-tight uppercase text-neutral-800 dark:text-white">Arena Floor Plan</h2>
           </div>
           
-          {/* Rounded Filter Pills matching screenshot */}
           <div className="flex flex-wrap gap-1.5 bg-neutral-100 dark:bg-neutral-900 p-1 rounded-full border border-neutral-200 dark:border-neutral-800">
             {['all', 'gates', 'food', 'restrooms', 'access'].map((tab) => (
               <button
                 key={tab}
-                onClick={() => { setFilter(tab); setSelectedItemId(null); setActiveRoute(null); }}
+                onClick={() => { setFilter(tab); setSelectedItemId(null); }}
                 aria-pressed={filter === tab}
                 className={`px-3 py-1.5 rounded-full uppercase font-mono text-[9px] tracking-wider transition-all cursor-pointer ${
                   filter === tab 
@@ -159,6 +180,7 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
           </div>
 
           <svg viewBox="0 0 400 300" className="w-full h-full max-w-[550px] aspect-[4/3] text-neutral-800 z-10" aria-hidden="true">
+            {/* Field graphics */}
             <ellipse cx="200" cy="150" rx="180" ry="135" fill="none" stroke="#262626" strokeWidth="1" />
             <ellipse cx="200" cy="150" rx="155" ry="115" fill="none" stroke="#262626" strokeWidth="1.5" />
             <ellipse cx="200" cy="150" rx="125" ry="92" fill="none" stroke="#1d1d1d" strokeWidth="1" />
@@ -173,26 +195,24 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
             <text x="200" y="228" textAnchor="middle" fill="#4b5563" fontSize="8" fontWeight="bold" fontFamily="monospace">ZONE C (SOUTH)</text>
             <text x="90" y="152" textAnchor="middle" fill="#4b5563" fontSize="8" fontWeight="bold" fontFamily="monospace">ZONE D (WEST)</text>
 
-            {emergencyState && emergencyState.active && (
+            {emergencyState?.active && (
               <g stroke="#F87171" strokeWidth="2.5" fill="none" className="animate-pulse">
-                <path d="M 200 80 L 200 35" markerEnd="url(#arrow)" />
-                <path d="M 300 150 L 355 150" markerEnd="url(#arrow)" />
-                <path d="M 200 220 L 200 265" markerEnd="url(#arrow)" />
-                <path d="M 100 150 L 45 150" markerEnd="url(#arrow)" />
-                <defs>
-                  <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#F87171" />
-                  </marker>
-                </defs>
+                <path d="M 200 80 L 200 35" />
+                <path d="M 300 150 L 355 150" />
+                <path d="M 200 220 L 200 265" />
+                <path d="M 100 150 L 45 150" />
               </g>
             )}
 
-            {activeRoute && (
+            {/* Dynamic Animated Route Path */}
+            {dynamicRoutePath && (
               <path
-                d={activeRoute.path}
+                d={dynamicRoutePath}
                 fill="none"
                 stroke="#e2ff70"
-                strokeWidth="4"
+                strokeWidth="4.5"
+                strokeLinecap="round"
+                strokeDasharray="8 6"
                 className="animate-route-flow"
               />
             )}
@@ -203,7 +223,8 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
             {filteredMarkers.map((marker) => {
               const leftPercent = (marker.x / 400) * 100;
               const topPercent = (marker.y / 300) * 100;
-              const isSelected = selectedItemId && selectedItemId === marker.id;
+              const isSelected = selectedItemId === marker.id;
+              const isStart = startLocationId === marker.id;
 
               return (
                 <button
@@ -212,7 +233,7 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
                   aria-label={`${marker.name}. ${marker.description}${marker.waitTime ? ` Wait time ${marker.waitTime} minutes.` : ''}`}
                   aria-pressed={isSelected}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full border text-xs font-mono font-bold cursor-pointer transition-all duration-300 ${getMarkerColor(marker.waitTime > 20 ? 'high' : marker.waitTime > 10 ? 'moderate' : 'low', marker.type)} ${
-                    isSelected ? 'ring-2 ring-white scale-125 z-40 animate-none' : 'hover:scale-110 z-30'
+                    isSelected ? 'ring-2 ring-white scale-125 z-40' : isStart ? 'ring-2 ring-[#e2ff70] scale-110 z-35' : 'hover:scale-110 z-30'
                   }`}
                   style={{ left: `${leftPercent}%`, top: `${topPercent}%` }}
                 >
@@ -242,12 +263,32 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
         <div>
           <div className="border-b border-neutral-100 dark:border-neutral-800 pb-3 mb-4">
             <h3 className="text-[10px] font-bold tracking-wider text-neutral-400 uppercase font-mono">Wayfinding Hub</h3>
-            <h2 className="text-lg font-black tracking-tight text-neutral-800 dark:text-white uppercase">Marker Analyzer</h2>
+            <h2 className="text-lg font-black tracking-tight text-neutral-800 dark:text-white uppercase">Dynamic Navigation</h2>
+          </div>
+
+          {/* Navigation Controls: Set Starting Location */}
+          <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 p-4 rounded-2xl mb-4 text-left">
+            <div className="flex items-center space-x-2 mb-2">
+              <Flag className="w-4 h-4 text-[#e2ff70]" />
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 font-mono">Set Starting Point</label>
+            </div>
+            <select
+              value={startLocationId}
+              onChange={(e) => setStartLocationId(e.target.value)}
+              className="w-full bg-white dark:bg-neutral-850 border border-neutral-200 dark:border-neutral-750 px-3 py-2 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#e2ff70]"
+            >
+              {resolvedMarkers.filter(m => m.type === 'gate').map(g => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+            <p className="text-[9px] text-neutral-400 mt-2 italic font-mono leading-none">
+              Then click any map hotspot icon to select your destination.
+            </p>
           </div>
 
           {selectedItem ? (
             <div className="space-y-4">
-              <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 p-4 rounded-2xl">
+              <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 p-4 rounded-2xl text-left">
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="inline-block text-[8px] uppercase tracking-widest font-mono bg-[#121212] dark:bg-white text-white dark:text-black px-2 py-0.5 rounded-full mb-1">
@@ -255,13 +296,13 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
                     </span>
                     <h4 className="font-bold text-neutral-800 dark:text-white text-sm">{selectedItem.name}</h4>
                   </div>
-                  <MapPin className="w-4 h-4 text-neutral-400 dark:text-neutral-500" />
+                  <MapPin className="w-4 h-4 text-[#e2ff70]" />
                 </div>
                 <p className="text-neutral-500 dark:text-neutral-400 text-[11px] mt-2 leading-relaxed">{selectedItem.description}</p>
               </div>
 
               {selectedItem.type !== 'medical' && selectedItem.type !== 'access' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 text-left">
                   <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 p-3 rounded-xl">
                     <span className="text-[9px] text-neutral-400 block font-mono">Wait Time</span>
                     <span className="text-xl font-black text-neutral-800 dark:text-white">{selectedItem.waitTime} <span className="text-xs font-normal text-neutral-400 font-mono">min</span></span>
@@ -278,36 +319,36 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
                 </div>
               )}
 
-              {paths[selectedItem.id] ? (
-                <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 p-4 rounded-2xl space-y-2">
-                  <div className="flex items-center text-xs text-neutral-800 dark:text-white font-bold">
+              {startLocationId !== selectedItemId ? (
+                <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 p-4 rounded-2xl space-y-2 text-left">
+                  <div className="flex items-center text-xs text-neutral-850 dark:text-white font-bold">
                     <Navigation className="w-3.5 h-3.5 mr-2 text-neutral-600 dark:text-neutral-400" />
                     <span>Dynamic Route Found</span>
                   </div>
-                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                    Calculated pathway from <strong className="text-black dark:text-white">{paths[selectedItem.id].from}</strong> to your target.
+                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400 leading-relaxed font-mono">
+                    Calculated concourse wayfinding path from <strong className="text-black dark:text-white">{startNode.name}</strong> to <strong className="text-black dark:text-white">{selectedItem.name}</strong>.
                   </p>
                   
                   <div className="border-t border-neutral-100 dark:border-neutral-800 pt-2 flex justify-between items-center">
                     <div className="text-[9px] font-mono text-neutral-400 dark:text-neutral-555">
-                      Distance: ~95 meters
+                      Est. Distance: ~{estimatedDistance} meters
                     </div>
                     <button
                       onClick={handleNavigate}
                       className="bg-[#121212] dark:bg-white text-white dark:text-black px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-all cursor-pointer shadow-sm border border-neutral-900 dark:border-neutral-200"
                     >
-                      Draw Route <Navigation className="w-3 h-3 ml-1" />
+                      Verify Route <Navigation className="w-3 h-3 ml-1" />
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="p-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 rounded-xl text-[10px] text-neutral-400 dark:text-neutral-500 italic font-mono text-center">
-                  Select a hotspot to trigger route paths.
+                <div className="p-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 rounded-xl text-[10px] text-neutral-450 dark:text-neutral-500 italic font-mono text-center">
+                  Start and destination locations are identical.
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-center py-12 text-neutral-400 dark:text-neutral-500 space-y-3">
+            <div className="text-center py-12 text-neutral-400 dark:text-neutral-555 space-y-3">
               <Eye className="w-8 h-8 mx-auto stroke-1" />
               <p className="text-xs leading-relaxed max-w-[200px] mx-auto font-mono">
                 Click any hotspot or POI marker on the floor plan to inspect sensor details.
@@ -317,7 +358,7 @@ export default function StadiumMap({ gates, zones, emergencyState, selectDestina
         </div>
 
         {/* Emergency Alert Banner */}
-        {emergencyState && emergencyState.active && (
+        {emergencyState?.active && (
           <div className="bg-neutral-900 dark:bg-black text-white p-4 rounded-2xl text-left space-y-2 mt-4 border border-neutral-800">
             <div className="flex items-center text-xs font-bold text-[#e2ff70]">
               <ShieldAlert className="w-4 h-4 mr-2 animate-bounce" />

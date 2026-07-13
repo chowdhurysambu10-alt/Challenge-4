@@ -19,32 +19,51 @@ export function StadiumProvider({ children }) {
   // Accessibility State Properties
   const [highContrast, setHighContrast] = useState(false);
   const [voiceGuidance, setVoiceGuidance] = useState(false);
-  const [textScale, setTextScale] = useState(1); // 1 = 100%, 1.2 = 120%, 1.45 = 145%
-  const [colorBlindFilter, setColorBlindFilter] = useState('none'); // 'none', 'deuteranopia', 'protanopia', 'tritanopia'
+  const [textScale, setTextScale] = useState(1);
+  const [colorBlindFilter, setColorBlindFilter] = useState('none');
 
-  // Connect to the backend Server-Sent Events (SSE) telemetry stream when dashboard is active
+  // Relational User Auth state
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('fifa-user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [token, setToken] = useState(() => localStorage.getItem('fifa-token') || null);
+
+  // Connect to the backend WebSocket telemetry stream when dashboard is active
   useEffect(() => {
     if (currentView !== 'dashboard') return;
 
-    console.log("EventSource: Connecting to live operations telemetry stream...");
-    const eventSource = new EventSource('/api/telemetry/stream');
+    console.log("WebSocket: Connecting to live telemetry stream...");
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socketUrl = `${protocol}//${window.location.host}/api/telemetry/ws`;
+    const ws = new WebSocket(socketUrl);
 
-    eventSource.onmessage = (event) => {
+    ws.onmessage = (event) => {
       try {
-        const liveData = JSON.parse(event.data);
-        setStadiumData(liveData);
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'telemetry') {
+          setStadiumData(payload.data);
+        }
       } catch (err) {
-        console.error("EventSource: Failed to parse telemetry event data: ", err);
+        console.error("WebSocket message parsing error: ", err);
       }
     };
 
-    eventSource.onerror = (err) => {
-      console.error("EventSource connection issue. Retrying connection...", err);
+    ws.onclose = () => {
+      console.log("WebSocket connection closed.");
+    };
+
+    ws.onerror = (err) => {
+      console.error("WebSocket error, waiting to reconnect: ", err);
     };
 
     return () => {
-      eventSource.close();
-      console.log("EventSource: Connection closed.");
+      ws.close();
+      console.log("WebSocket: Connection closed.");
     };
   }, [currentView]);
 
@@ -57,11 +76,76 @@ export function StadiumProvider({ children }) {
     ]);
   };
 
-const OPS_TOKEN = 'fifa-ops-token-2026-secure';
+  // Auth Operations
+  const login = async (email, password) => {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Login failed.');
+      
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('fifa-token', data.token);
+      localStorage.setItem('fifa-user', JSON.stringify(data.user));
 
-// Sync safety alarm triggers directly to Node API server
+      setCurrentView('dashboard');
+      if (data.user.role === 'admin' || data.user.role === 'staff') {
+        setActiveTab('ops');
+      } else {
+        setActiveTab('fan');
+      }
+      addNotification('info', `Log-in authorized: ${data.user.name} (${data.user.role.toUpperCase()})`);
+      return { success: true };
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const googleLogin = async (email, name, role) => {
+    try {
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, name, role })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Google login failed.');
+
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('fifa-token', data.token);
+      localStorage.setItem('fifa-user', JSON.stringify(data.user));
+
+      setCurrentView('dashboard');
+      if (data.user.role === 'admin' || data.user.role === 'staff') {
+        setActiveTab('ops');
+      } else {
+        setActiveTab('fan');
+      }
+      addNotification('info', `Google Sign-in: Welcome ${data.user.name}!`);
+      return { success: true };
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('fifa-token');
+    localStorage.removeItem('fifa-user');
+    setCurrentView('landing');
+    addNotification('info', 'Session ended successfully.');
+  };
+
+  // Sync safety overrides (Admin only)
   const handleSetEmergencyState = async (newState) => {
-    // Optimistic local UI update
     setStadiumData(prev => ({
       ...prev,
       emergencyState: newState,
@@ -76,7 +160,7 @@ const OPS_TOKEN = 'fifa-ops-token-2026-secure';
         method: 'POST',
         headers: { 
           'content-type': 'application/json',
-          'Authorization': `Bearer ${OPS_TOKEN}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(newState)
       });
@@ -87,11 +171,10 @@ const OPS_TOKEN = 'fifa-ops-token-2026-secure';
     }
   };
 
-  // Sync volunteer steward dispatch to Node API server
+  // Sync volunteer steward dispatch (Staff/Admin only)
   const handleDispatchStaff = async () => {
     addNotification("system-alert", "Steward dispatch orders transmitted to supervisor channels.");
     
-    // Optimistic UI updates
     setStadiumData(prev => ({
       ...prev,
       stadiumStats: {
@@ -104,7 +187,7 @@ const OPS_TOKEN = 'fifa-ops-token-2026-secure';
       const response = await fetch('/api/telemetry/dispatch', { 
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPS_TOKEN}`
+          'Authorization': `Bearer ${token}`
         }
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -113,7 +196,7 @@ const OPS_TOKEN = 'fifa-ops-token-2026-secure';
     }
   };
 
-  // Sync AI-prompted reroutes and audio announcements to Node API server
+  // Sync AI-prompted reroutes (Staff/Admin only)
   const handleTriggerBroadcastRedirect = async () => {
     addNotification("ai-suggestion", "Rerouting prompt transmitted to stand PA channels.");
     
@@ -121,7 +204,7 @@ const OPS_TOKEN = 'fifa-ops-token-2026-secure';
       const response = await fetch('/api/telemetry/broadcast', { 
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPS_TOKEN}`
+          'Authorization': `Bearer ${token}`
         }
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -133,16 +216,6 @@ const OPS_TOKEN = 'fifa-ops-token-2026-secure';
   const handleSelectDestinationForNav = (destinationName) => {
     setActiveTab('fan');
     addNotification("info", `Wayfinding path mapped for: ${destinationName}`);
-  };
-
-  const enterDashboard = (mode) => {
-    setCurrentView('dashboard');
-    setActiveTab(mode === 'ops' ? 'ops' : 'fan');
-    addNotification('info', `Authorized session: ${mode === 'ops' ? 'Operations Dispatcher' : 'Fan Support'}.`);
-  };
-
-  const exitSession = () => {
-    setCurrentView('landing');
   };
 
   return (
@@ -168,8 +241,13 @@ const OPS_TOKEN = 'fifa-ops-token-2026-secure';
       handleDispatchStaff,
       handleTriggerBroadcastRedirect,
       handleSelectDestinationForNav,
-      enterDashboard,
-      exitSession,
+      logout,
+      
+      // Relational Auth states
+      user,
+      token,
+      login,
+      googleLogin,
 
       // Accessibility values
       highContrast,

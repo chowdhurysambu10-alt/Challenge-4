@@ -57,3 +57,28 @@ globalThis.EventSource = class {
   }
   close() {}
 };
+
+// Mock localStorage and sessionStorage
+Object.defineProperty(globalThis, 'localStorage', {
+  value: dom.window.localStorage,
+  writable: true,
+  configurable: true
+});
+
+Object.defineProperty(globalThis, 'sessionStorage', {
+  value: dom.window.sessionStorage,
+  writable: true,
+  configurable: true
+});
+
+// Mock WebSocket (required by live context connection)
+globalThis.WebSocket = class {
+  constructor(url) {
+    this.url = url;
+    this.onmessage = null;
+    this.onclose = null;
+    this.onerror = null;
+  }
+  send() {}
+  close() {}
+};

@@ -15,13 +15,16 @@ import {
   ChevronRight,
   Sun,
   Moon,
-  Accessibility
+  Accessibility,
+  User
 } from 'lucide-react';
 
 import { useStadium } from './context/StadiumContext';
 import LandingPage from './components/LandingPage';
+import ErrorBoundary from './components/ErrorBoundary';
+import LoadingSkeleton from './components/ui/LoadingSkeleton';
 
-// Lazy load components for performance optimization & code splitting (Lighthouse score improvement)
+// Lazy load components for performance optimization & code splitting
 const FanAssistant = lazy(() => import('./components/FanAssistant'));
 const StadiumMap = lazy(() => import('./components/StadiumMap'));
 const CrowdDashboard = lazy(() => import('./components/CrowdDashboard'));
@@ -49,8 +52,10 @@ export default function App() {
     handleDispatchStaff,
     handleTriggerBroadcastRedirect,
     handleSelectDestinationForNav,
-    enterDashboard,
-    exitSession,
+    
+    // Auth context values
+    user,
+    logout,
 
     // Accessibility contexts
     highContrast,
@@ -68,7 +73,42 @@ export default function App() {
     };
   }, [textScale]);
 
+  // Define menu configuration with role-based restriction arrays
+  const menuItems = React.useMemo(() => {
+    return [
+      { id: 'fan', label: 'Fan AI Chat', icon: MessageSquare, description: 'Stadium Assistant', roles: ['fan', 'staff', 'admin'] },
+      { id: 'map', label: 'Stadium Map', icon: Map, description: 'Wayfinding Layout', roles: ['fan', 'staff', 'admin'] },
+      { id: 'crowd', label: 'Crowd Intel', icon: BarChart3, description: 'Queue heatmaps', roles: ['staff', 'admin'] },
+      { id: 'transit', label: 'Logistics', icon: Bus, description: 'Transit & Parking', roles: ['fan', 'staff', 'admin'] },
+      { id: 'emergency', label: 'Safety & Access', icon: AlertTriangle, description: 'ADA & Evacuation', roles: ['fan', 'admin'] },
+      { id: 'ops', label: 'Ops Feed', icon: LayoutDashboard, description: 'Telemetry logs', roles: ['staff', 'admin'] }
+    ].filter(item => !user || item.roles.includes(user.role));
+  }, [user]);
+
+  // Fallback to first permitted tab if activeTab is blocked for this role
+  React.useEffect(() => {
+    if (user && currentView === 'dashboard') {
+      const allowed = menuItems.some(m => m.id === activeTab);
+      if (!allowed && menuItems.length > 0) {
+        setActiveTab(menuItems[0].id);
+      }
+    }
+  }, [user, currentView, menuItems, activeTab, setActiveTab]);
+
   const renderTabContent = () => {
+    const isAllowed = menuItems.some(m => m.id === activeTab);
+    if (!isAllowed) {
+      return (
+        <div className="p-12 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 rounded-3xl text-center space-y-4">
+          <ShieldAlert className="w-12 h-12 text-red-500 mx-auto" />
+          <h2 className="text-base font-black text-neutral-800 dark:text-white uppercase font-mono">Access Denied</h2>
+          <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed font-mono">
+            Your current credential role [{user?.role?.toUpperCase()}] does not possess operations permissions to inspect this module.
+          </p>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'fan':
         return (
@@ -133,26 +173,12 @@ export default function App() {
     }
   };
 
-  const menuItems = [
-    { id: 'fan', label: 'Fan AI Chat', icon: MessageSquare, description: 'Stadium Assistant' },
-    { id: 'map', label: 'Stadium Map', icon: Map, description: 'Wayfinding Layout' },
-    { id: 'crowd', label: 'Crowd Intel', icon: BarChart3, description: 'Queue heatmaps' },
-    { id: 'transit', label: 'Logistics', icon: Bus, description: 'Transit & Parking' },
-    { id: 'emergency', label: 'Safety & Access', icon: AlertTriangle, description: 'ADA & Evacuation' },
-    { id: 'ops', label: 'Ops Feed', icon: LayoutDashboard, description: 'Telemetry logs' }
-  ];
-
   if (currentView === 'landing') {
-    return (
-      <LandingPage 
-        onEnter={enterDashboard} 
-      />
-    );
+    return <LandingPage />;
   }
 
   const activeItem = menuItems.find(m => m.id === activeTab);
 
-  // Apply CSS contrast & accessibility filters dynamically
   const getColorBlindFilterStyle = () => {
     if (colorBlindFilter === 'deuteranopia') return { filter: 'hue-rotate(20deg) saturate(90%)' };
     if (colorBlindFilter === 'protanopia') return { filter: 'hue-rotate(-20deg) saturate(85%)' };
@@ -168,28 +194,30 @@ export default function App() {
       <div className="min-h-screen bg-[#f3f4f6] dark:bg-[#0a0a0a] text-[#121212] dark:text-white flex flex-col font-sans relative transition-colors duration-300">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-black">Skip to main content</a>
       
-      {/* Top Banner Override for Emergencies */}
+      {/* Top Emergency Alert Bar */}
       {stadiumData.emergencyState.active && (
         <div role="alert" className="z-50 bg-[#121212] text-[#e2ff70] px-4 md:px-8 py-3 border-b border-neutral-900 flex items-center justify-between text-xs md:text-sm font-bold shadow-md">
           <div className="flex items-center space-x-2.5">
             <ShieldAlert className="w-5 h-5 animate-bounce" />
             <span>
-              SIMULATED SAFETY EVENT: Incident in {stadiumData.emergencyState.location}. Review the illustrative exit pathways on the map.
+              SIMULATED SAFETY EVENT: Incident in {stadiumData.emergencyState.location}. Review dynamic exits on map.
             </span>
           </div>
-          <button 
-            onClick={() => handleSetEmergencyState({ active: false, type: null, location: null, message: '', evacRoute: [] })}
-            className="bg-[#e2ff70] text-[#121212] px-3 py-1 rounded-full text-[10px] uppercase font-mono font-bold cursor-pointer transition-all ml-4"
-          >
-            Clear Simulation
-          </button>
+          {user?.role === 'admin' && (
+            <button 
+              onClick={() => handleSetEmergencyState({ active: false, type: null, location: null, message: '', evacRoute: [] })}
+              className="bg-[#e2ff70] text-[#121212] px-3 py-1 rounded-full text-[10px] uppercase font-mono font-bold cursor-pointer transition-all ml-4"
+            >
+              Clear Simulation
+            </button>
+          )}
         </div>
       )}
 
       {/* Main Layout Container */}
       <div className="flex-1 flex flex-col md:flex-row min-h-screen">
         
-        {/* Floating Left Sidebar matching screenshot */}
+        {/* Floating Left Sidebar */}
         <aside id="primary-navigation" className={`w-72 md:w-20 lg:w-64 bg-[#121212] text-white flex-shrink-0 z-40 transition-transform duration-300 md:translate-x-0 m-4 rounded-[32px] flex flex-col justify-between p-5 shadow-2xl ${
           mobileMenuOpen ? 'translate-x-0 absolute top-0 bottom-0 left-0 border border-neutral-850' : '-translate-x-full absolute md:relative'
         }`}>
@@ -224,7 +252,7 @@ export default function App() {
                     <div className={`p-2 rounded-xl flex items-center justify-center ${isActive ? 'bg-[#e2ff70] text-black' : 'bg-neutral-900 text-neutral-400'}`}>
                       <Icon className="w-5 h-5 flex-shrink-0" />
                     </div>
-                    <div className="md:hidden lg:block col-span-2">
+                    <div className="md:hidden lg:block">
                       <h4 className="font-bold text-xs uppercase tracking-wide leading-none">{item.label}</h4>
                       <p className={`text-[9px] mt-0.5 font-light ${isActive ? 'text-neutral-500' : 'text-neutral-450'}`}>
                         {item.description}
@@ -236,13 +264,12 @@ export default function App() {
             </nav>
           </div>
 
-          {/* Interactive Accessibility settings panel inside the float navigation */}
+          {/* Accessibility Settings */}
           <div className="md:hidden lg:block border-t border-neutral-900 pt-4 mt-4 space-y-3 px-1">
             <span className="text-[9px] uppercase tracking-widest text-neutral-500 font-mono font-bold flex items-center">
               <Accessibility className="w-3.5 h-3.5 mr-1" /> a11y cockpit
             </span>
             
-            {/* Contrast toggle */}
             <button 
               onClick={() => setHighContrast(!highContrast)}
               className={`w-full py-1.5 px-3 rounded-xl text-[10px] font-mono font-bold flex justify-between items-center transition-all cursor-pointer ${
@@ -255,7 +282,6 @@ export default function App() {
               </span>
             </button>
 
-            {/* Text Scale slider buttons */}
             <div className="flex justify-between items-center bg-neutral-900 rounded-xl p-1 text-[10px] font-mono text-neutral-450">
               <button 
                 onClick={() => setTextScale(Math.max(1, textScale - 0.15))}
@@ -274,7 +300,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Color blind selector menu */}
             <select
               value={colorBlindFilter}
               onChange={(e) => setColorBlindFilter(e.target.value)}
@@ -287,36 +312,42 @@ export default function App() {
             </select>
           </div>
 
-          {/* Sidebar Footer details */}
+          {/* User Profile Info and Logout */}
           <div className="space-y-4 border-t border-neutral-900 pt-4">
+            {user && (
+              <div className="md:hidden lg:flex items-center space-x-2.5 px-3 py-1 bg-neutral-900/40 rounded-xl border border-neutral-850">
+                <div className="p-1.5 bg-[#e2ff70] text-black rounded-lg">
+                  <User className="w-3.5 h-3.5" />
+                </div>
+                <div className="text-left font-mono truncate">
+                  <p className="text-[10px] text-white font-bold leading-none truncate">{user.name}</p>
+                  <span className="text-[8px] text-[#e2ff70] uppercase font-bold tracking-wider leading-none mt-0.5 block">
+                    [{user.role}]
+                  </span>
+                </div>
+              </div>
+            )}
+
             <button 
-              onClick={exitSession}
+              onClick={logout}
               className="w-full flex items-center space-x-3 p-3 rounded-2xl text-neutral-450 hover:text-white hover:bg-neutral-900/60 transition-all cursor-pointer text-left text-xs uppercase font-mono font-bold"
             >
               <div className="p-2 bg-neutral-900 rounded-xl">
                 <LogOut className="w-5 h-5" />
               </div>
-              <span className="md:hidden lg:inline">Exit Session</span>
+              <span className="md:hidden lg:inline">Log Out</span>
             </button>
-
-            <div className="md:hidden lg:block font-mono text-[9px] text-neutral-500 leading-normal">
-              <div className="flex justify-between">
-                <span>Core sync</span>
-                <span className="text-[#e2ff70]">OK</span>
-              </div>
-            </div>
           </div>
         </aside>
 
-        {/* Main Content Workspace on the Right */}
+        {/* Main Content Workspace */}
         <main id="main-content" tabIndex="-1" className="flex-1 p-6 md:p-10 flex flex-col justify-between overflow-y-auto max-w-7xl mx-auto w-full">
           
           <div className="space-y-8">
-            {/* Header: matches screenshot layout */}
+            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-neutral-250 dark:border-neutral-800 pb-6">
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  {/* Mobile navigation trigger */}
                   <button 
                     onClick={() => setMobileMenuOpen(prev => !prev)}
                     aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
@@ -332,7 +363,6 @@ export default function App() {
                   </span>
                   <ChevronRight className="w-3 h-3 text-neutral-400 dark:text-neutral-600" />
                   
-                  {/* Dashed setting badge like the screenshot */}
                   <div className="text-[9px] tracking-wider uppercase font-mono font-bold px-2 py-0.5 bg-[#e2ff70] border border-dashed border-neutral-400 dark:border-neutral-700 text-black rounded-full flex items-center space-x-1.5">
                     <span>{activeItem ? activeItem.label : 'Dashboard'}</span>
                   </div>
@@ -369,7 +399,7 @@ export default function App() {
                 <div className="relative">
                   <button 
                     onClick={() => setShowNotificationsDropdown(prev => !prev)}
-                    className="p-2 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 shadow-sm rounded-2xl text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-all cursor-pointer relative"
+                    className="p-2 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 shadow-sm rounded-2xl text-neutral-650 dark:text-neutral-450 hover:text-black dark:hover:text-white transition-all cursor-pointer relative"
                   >
                     <Bell className="w-4 h-4" />
                     {notifications.length > 0 && (
@@ -378,7 +408,7 @@ export default function App() {
                   </button>
 
                   {showNotificationsDropdown && (
-                    <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 rounded-3xl p-5 shadow-2xl z-50 space-y-3 font-mono text-[#121212] dark:text-white">
+                    <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-[#121212] border border-neutral-200 dark:border-neutral-800 rounded-3xl p-5 shadow-2xl z-50 space-y-3 font-mono text-[#121212] dark:text-white text-left">
                       <div className="flex justify-between items-center border-b border-neutral-100 dark:border-neutral-850 pb-2">
                         <span className="text-xs font-bold uppercase tracking-wider">IoT Logs</span>
                         <span className="w-2 h-2 rounded-full bg-[#e2ff70]" />
@@ -390,8 +420,8 @@ export default function App() {
                               n.type === 'system-alert' ? 'bg-[#121212] dark:bg-white' : 'bg-[#e2ff70]'
                             }`} />
                             <div className="flex-1">
-                              <p className="text-neutral-700 dark:text-neutral-300">{n.text}</p>
-                              <span className="text-[9px] text-neutral-400 dark:text-neutral-500">{n.time}</span>
+                              <p className="text-neutral-700 dark:text-neutral-350">{n.text}</p>
+                              <span className="text-[9px] text-neutral-450 dark:text-neutral-500">{n.time}</span>
                             </div>
                           </div>
                         ))}
@@ -412,19 +442,21 @@ export default function App() {
               </div>
             </div>
 
-            {/* Dashboard Sub-Modules Wrapped in Suspense Boundary */}
+            {/* Dashboard Sub-Modules wrapped in Error Boundary and Suspense */}
             <div className="relative">
-              <Suspense fallback={<div className="p-12 text-center text-xs font-mono text-neutral-500">Connecting to telemetry core...</div>}>
-                {renderTabContent()}
-              </Suspense>
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingSkeleton />}>
+                  {renderTabContent()}
+                </Suspense>
+              </ErrorBoundary>
             </div>
           </div>
 
-          {/* Footer stats matching FIDS dashboard layout */}
+          {/* Footer stats */}
           <footer className="mt-12 pt-6 border-t border-neutral-200 dark:border-neutral-800 flex flex-col md:flex-row items-center justify-between text-xs text-neutral-500 gap-4 font-mono">
             <div className="flex items-center space-x-2.5">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#121212] dark:bg-[#e2ff70]" />
-              <span>Telemetry sync: Active (0.4s latency)</span>
+              <span>Telemetry sync: Active (0.2s latency)</span>
             </div>
             <div>
               Match: <strong className="text-black dark:text-white">{stadiumData.stadiumStats.matchInfo.match} ({stadiumData.stadiumStats.matchInfo.timeText})</strong>
